@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
+import { decrypt, isEncrypted } from "@/lib/encryption";
 
 const STRIPE_API_VERSION = "2026-01-28.clover" as const;
 
@@ -62,8 +63,12 @@ export async function getStripeClientForOrg(orgId: string): Promise<{
 
   if (!connection) return null;
 
+  const accessToken = isEncrypted(connection.access_token)
+    ? decrypt(connection.access_token)
+    : connection.access_token;
+
   return {
-    client: createStripeClient(connection.access_token),
+    client: createStripeClient(accessToken),
     connection: {
       id: connection.id,
       stripe_account_id: connection.stripe_account_id,

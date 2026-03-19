@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { encrypt } from "@/lib/encryption";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -29,13 +30,18 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createServiceClient();
 
-    // Store the connection
+    // Encrypt tokens before storing
+    const encryptedAccessToken = encrypt(response.access_token!);
+    const encryptedRefreshToken = response.refresh_token
+      ? encrypt(response.refresh_token)
+      : null;
+
     const { error: dbError } = await supabase.from("stripe_connections").upsert(
       {
         org_id: state,
         stripe_account_id: response.stripe_user_id!,
-        access_token: response.access_token!,
-        refresh_token: response.refresh_token || null,
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
         livemode: response.livemode || false,
         scope: response.scope || "",
       },

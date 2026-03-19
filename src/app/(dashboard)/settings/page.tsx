@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   // Get Stripe connection
   const { data: stripeConnection } = await supabase
     .from("stripe_connections")
-    .select("*")
+    .select("id, stripe_account_id, livemode, scope, connected_at")
     .eq("org_id", userProfile.org_id)
     .single();
 
