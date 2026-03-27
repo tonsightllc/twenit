@@ -60,8 +60,9 @@ export async function GET(request: NextRequest) {
     // Trigger initial sync of customers and subscriptions
     await syncStripeData(state, response.access_token!);
 
+    // Redirect to the new Onboarding screen instead of silent success
     return NextResponse.redirect(
-      new URL("/settings/stripe?success=stripe_connected", process.env.NEXT_PUBLIC_APP_URL)
+      new URL("/settings/stripe/onboarding", process.env.NEXT_PUBLIC_APP_URL)
     );
   } catch (error) {
     console.error("Stripe OAuth error:", error);
@@ -78,10 +79,10 @@ async function syncStripeData(orgId: string, accessToken: string) {
   });
 
   try {
-    // Sync customers
-    const customers = await stripeClient.customers.list({ limit: 100 });
+    // Sync customers (auto-paginated up to 10000 to prevent edge function timeouts)
+    const customers = await stripeClient.customers.list({ limit: 100 }).autoPagingToArray({ limit: 10000 });
     
-    for (const customer of customers.data) {
+    for (const customer of customers) {
       await supabase.from("customers").upsert(
         {
           org_id: orgId,
@@ -89,7 +90,8 @@ async function syncStripeData(orgId: string, accessToken: string) {
           email: customer.email || "",
           name: customer.name || null,
           metadata: customer.metadata || {},
-          activation_status: "pending",
+          // activation_status omitted so it defaults to 'pending' on insert
+          // and doesn't overwrite existing users' status on update
         },
         {
           onConflict: "org_id,stripe_customer_id",
@@ -98,9 +100,9 @@ async function syncStripeData(orgId: string, accessToken: string) {
     }
 
     // Sync subscriptions
-    const subscriptions = await stripeClient.subscriptions.list({ limit: 100 });
+    const subscriptions = await stripeClient.subscriptions.list({ limit: 100 }).autoPagingToArray({ limit: 10000 });
     
-    for (const sub of subscriptions.data) {
+    for (const sub of subscriptions) {
       // First get or create the customer
       const { data: dbCustomer } = await supabase
         .from("customers")

@@ -319,57 +319,15 @@ export default function StripeSettingsPage() {
           {/* Webhook Config */}
           <Card>
             <CardHeader>
-              <CardTitle>Configuración de Webhooks</CardTitle>
+              <CardTitle>Sincronización en Tiempo Real</CardTitle>
               <CardDescription>
-                Para recibir eventos en tiempo real, configura este webhook en tu
-                dashboard de Stripe
+                Tus webhooks y alertas de fraude están gestionados automáticamente usando Stripe Connect.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">URL del Webhook</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="flex-1 p-3 bg-muted rounded-lg text-sm font-mono">
-                    {typeof window !== "undefined"
-                      ? window.location.origin
-                      : "https://tu-dominio.com"}
-                    /api/webhooks/stripe
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${window.location.origin}/api/webhooks/stripe`
-                      );
-                      toast.success("URL copiada");
-                    }}
-                  >
-                    Copiar
-                  </Button>
-                </div>
-              </div>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>
-                  Eventos que debes habilitar en Stripe:
-                </p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {[
-                    "customer.created",
-                    "customer.updated",
-                    "customer.subscription.*",
-                    "invoice.paid",
-                    "invoice.payment_failed",
-                    "charge.dispute.*",
-                    "charge.refunded",
-                    "radar.early_fraud_warning.created",
-                    "checkout.session.completed",
-                  ].map((event) => (
-                    <Badge key={event} variant="outline" className="font-mono text-xs">
-                      {event}
-                    </Badge>
-                  ))}
-                </div>
+            <CardContent>
+              <div className="flex items-center gap-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 p-4 rounded-lg">
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+                <p>Nuestra plataforma está recibiendo todos tus eventos de suscripciones, pagos, Early Fraud Warnings y disputas en tiempo real. No necesitas configurar URLs de webhook manualmente en tu dashboard de Stripe.</p>
               </div>
             </CardContent>
           </Card>

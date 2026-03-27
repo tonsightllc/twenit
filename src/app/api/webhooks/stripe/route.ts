@@ -41,23 +41,30 @@ export async function POST(request: NextRequest) {
 
   // Get org_id from the connected account
   const accountId = event.account;
-
   let orgId: string | null = null;
 
   if (accountId) {
-    const { data: connection } = await supabase
+    const { data: connection, error: dbError } = await supabase
       .from("stripe_connections")
       .select("org_id")
       .eq("stripe_account_id", accountId)
       .single();
 
+    if (dbError) {
+      console.error(`[Webhook] Database error finding org for account ${accountId}:`, dbError);
+    }
     orgId = connection?.org_id || null;
+  } else {
+    console.log(`[Webhook] Ignoring direct platform event (no accountId): ${event.type}`);
+    return NextResponse.json({ received: true });
   }
 
   if (!orgId) {
-    console.log("No org found for account:", accountId);
+    console.warn(`[Webhook] No active organization found for connected account: ${accountId}`);
     return NextResponse.json({ received: true });
   }
+
+  console.log(`[Webhook] Processing event ${event.type} for org ${orgId}`);
 
   // Log the event
   await supabase.from("stripe_events").insert({
@@ -143,16 +150,23 @@ export async function POST(request: NextRequest) {
           event.data.object as Stripe.Checkout.Session
         );
         break;
+      default:
+        console.log(`[Webhook] Unhandled event type: ${event.type}`);
+        break;
     }
 
     // Mark event as processed
-    await supabase
+    const { error: updateError } = await supabase
       .from("stripe_events")
       .update({ processed: true, processed_at: new Date().toISOString() })
       .eq("stripe_event_id", event.id)
       .eq("org_id", orgId);
+      
+    if (updateError) {
+      console.error(`[Webhook] Failed to mark event ${event.id} as processed:`, updateError);
+    }
   } catch (error) {
-    console.error("Error processing webhook:", error);
+    console.error(`[Webhook] CRITICAL Error processing event ${event.type} for org ${orgId}:`, error);
   }
 
   return NextResponse.json({ received: true });
