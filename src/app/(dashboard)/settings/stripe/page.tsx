@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,6 +25,8 @@ import {
   UserMinus,
   AlertTriangle,
   XCircle,
+  Key,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -35,6 +38,7 @@ interface StripeConnectionData {
   stripe_account_id: string;
   livemode: boolean;
   connected_at: string;
+  connection_type: string | null;
 }
 
 const FEATURES = [
@@ -80,15 +84,18 @@ export default function StripeSettingsPage() {
   const { orgId } = useOrg();
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [connection, setConnection] = useState<StripeConnectionData | null>(
-    null
-  );
+  const [connection, setConnection] = useState<StripeConnectionData | null>(null);
   const [customerCount, setCustomerCount] = useState(0);
   const [subCount, setSubCount] = useState(0);
+  const [connectMethod, setConnectMethod] = useState<"oauth" | "apikey" | null>(null);
+
+  // API Key state
+  const [apiKey, setApiKey] = useState("");
+  const [connectingApiKey, setConnectingApiKey] = useState(false);
+
   const searchParams = useSearchParams();
   const supabase = createClient();
 
-  // Handle URL params for success/error messages
   useEffect(() => {
     const success = searchParams.get("success");
     const error = searchParams.get("error");
@@ -108,39 +115,26 @@ export default function StripeSettingsPage() {
   }, [searchParams]);
 
   const loadData = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !orgId) { setLoading(false); return; }
 
-    if (!orgId) {
-      setLoading(false);
-      return;
-    }
-
-    const [
-      { data: stripeConnection },
-      { count: customers },
-      { count: subs },
-    ] = await Promise.all([
-      supabase
-        .from("stripe_connections")
-        .select("id, stripe_account_id, livemode, connected_at")
-        .eq("org_id", orgId)
-        .single(),
-      supabase
-        .from("customers")
-        .select("*", { count: "exact", head: true })
-        .eq("org_id", orgId),
-      supabase
-        .from("subscriptions")
-        .select("*", { count: "exact", head: true })
-        .eq("org_id", orgId)
-        .eq("status", "active"),
-    ]);
+    const [{ data: stripeConnection }, { count: customers }, { count: subs }] =
+      await Promise.all([
+        supabase
+          .from("stripe_connections")
+          .select("id, stripe_account_id, livemode, connected_at, connection_type")
+          .eq("org_id", orgId)
+          .single(),
+        supabase
+          .from("customers")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId),
+        supabase
+          .from("subscriptions")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .eq("status", "active"),
+      ]);
 
     setConnection(stripeConnection);
     setCustomerCount(customers || 0);
@@ -148,25 +142,43 @@ export default function StripeSettingsPage() {
     setLoading(false);
   }, [supabase, orgId]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
+
+  async function handleApiKeyConnect() {
+    if (!apiKey.trim()) return;
+    setConnectingApiKey(true);
+    try {
+      const res = await fetch("/api/stripe/connect-apikey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: apiKey.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(
+          data.webhookRegistered
+            ? `Stripe conectado — webhook registrado automáticamente ✓`
+            : `Stripe conectado — configurá el webhook manualmente en tu dashboard de Stripe`
+        );
+        setApiKey("");
+        setConnectMethod(null);
+        await loadData();
+      } else {
+        toast.error(data.error || "Error al conectar");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setConnectingApiKey(false);
+    }
+  }
 
   async function handleDisconnect() {
-    if (
-      !confirm(
-        "¿Estás seguro de desconectar Stripe? Se perderá la sincronización de datos."
-      )
-    )
-      return;
-
+    if (!confirm("¿Estás seguro de desconectar Stripe? Se perderá la sincronización de datos.")) return;
     setDisconnecting(true);
     try {
-      const response = await fetch("/api/stripe/disconnect", {
-        method: "POST",
-      });
+      const response = await fetch("/api/stripe/disconnect", { method: "POST" });
       const result = await response.json();
-
       if (result.success) {
         toast.success("Stripe desconectado");
         setConnection(null);
@@ -193,14 +205,10 @@ export default function StripeSettingsPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/settings">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+          <Link href="/settings"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Conexión con Stripe
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">Conexión con Stripe</h1>
           <p className="text-muted-foreground">
             {connection
               ? "Tu cuenta de Stripe está conectada"
@@ -210,9 +218,8 @@ export default function StripeSettingsPage() {
       </div>
 
       {connection ? (
-        // ─── Connected State ──────────────────────────────────────
+        // ─── Connected State ────────────────────────────────────────────────
         <div className="space-y-6">
-          {/* Connection Info */}
           <Card className="border-green-200 dark:border-green-900">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -222,57 +229,42 @@ export default function StripeSettingsPage() {
                   </div>
                   <div>
                     <CardTitle>Stripe Conectado</CardTitle>
-                    <CardDescription>
-                      Tu cuenta está vinculada y sincronizando datos
-                    </CardDescription>
+                    <CardDescription>Tu cuenta está vinculada y sincronizando datos</CardDescription>
                   </div>
                 </div>
-                <Badge
-                  variant={connection.livemode ? "default" : "secondary"}
-                  className="text-sm"
-                >
-                  {connection.livemode ? "Producción" : "Modo Test"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={connection.livemode ? "default" : "secondary"} className="text-sm">
+                    {connection.livemode ? "Producción" : "Modo Test"}
+                  </Badge>
+                  {connection.connection_type === "apikey" && (
+                    <Badge variant="outline" className="text-sm gap-1">
+                      <Key className="h-3 w-3" /> API Key
+                    </Badge>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid gap-6 md:grid-cols-3">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Account ID
-                  </label>
-                  <p className="font-mono text-sm mt-1">
-                    {connection.stripe_account_id}
-                  </p>
+                  <label className="text-sm font-medium text-muted-foreground">Account ID</label>
+                  <p className="font-mono text-sm mt-1">{connection.stripe_account_id}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Conectado desde
-                  </label>
+                  <label className="text-sm font-medium text-muted-foreground">Conectado desde</label>
                   <p className="text-sm mt-1">
-                    {new Date(connection.connected_at).toLocaleDateString(
-                      "es-AR",
-                      {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      }
-                    )}
+                    {new Date(connection.connected_at).toLocaleDateString("es-AR", { year: "numeric", month: "long", day: "numeric" })}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Dashboard de Stripe
-                  </label>
+                  <label className="text-sm font-medium text-muted-foreground">Dashboard de Stripe</label>
                   <p className="mt-1">
                     <a
                       href={`https://dashboard.stripe.com/${connection.livemode ? "" : "test/"}dashboard`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      target="_blank" rel="noopener noreferrer"
                       className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                     >
-                      Abrir dashboard
-                      <ArrowRight className="h-3 w-3" />
+                      Abrir dashboard <ArrowRight className="h-3 w-3" />
                     </a>
                   </p>
                 </div>
@@ -280,65 +272,61 @@ export default function StripeSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Synced Data Summary */}
+          {/* Synced Data */}
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Clientes Sincronizados
-                </CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Clientes Sincronizados</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{customerCount}</div>
                 <Button variant="link" className="px-0 h-auto" asChild>
-                  <Link href="/ventas">
-                    Ver clientes
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Link>
+                  <Link href="/ventas">Ver clientes <ArrowRight className="ml-1 h-3 w-3" /></Link>
                 </Button>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Suscripciones Activas
-                </CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Suscripciones Activas</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{subCount}</div>
                 <Button variant="link" className="px-0 h-auto" asChild>
-                  <Link href="/ventas">
-                    Ver suscripciones
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Link>
+                  <Link href="/ventas">Ver suscripciones <ArrowRight className="ml-1 h-3 w-3" /></Link>
                 </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Webhook Config */}
+          {/* Webhook Status */}
           <Card>
             <CardHeader>
               <CardTitle>Sincronización en Tiempo Real</CardTitle>
               <CardDescription>
-                Tus webhooks y alertas de fraude están gestionados automáticamente usando Stripe Connect.
+                {connection.connection_type === "apikey"
+                  ? "Conectado vía API Key — los eventos se reciben a través del webhook registrado en tu cuenta."
+                  : "Conectado vía OAuth — los eventos se gestionan automáticamente usando Stripe Connect."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 p-4 rounded-lg">
                 <ShieldCheck className="h-5 w-5 shrink-0" />
-                <p>Nuestra plataforma está recibiendo todos tus eventos de suscripciones, pagos, Early Fraud Warnings y disputas en tiempo real. No necesitas configurar URLs de webhook manualmente en tu dashboard de Stripe.</p>
+                <p>
+                  Nuestra plataforma está recibiendo todos tus eventos de suscripciones, pagos, Early Fraud Warnings y disputas en tiempo real.
+                  {connection.connection_type === "apikey" && (
+                    <> Si el webhook no fue registrado automáticamente, agregá <code className="bg-black/10 px-1 rounded text-xs">{typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/stripe</code> manualmente en tu <a href="https://dashboard.stripe.com/test/webhooks" target="_blank" rel="noopener noreferrer" className="underline inline-flex items-center gap-0.5">dashboard de Stripe <ExternalLink className="h-3 w-3" /></a>.</>
+                  )}
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Disconnect */}
+          {/* Danger Zone */}
           <Card className="border-red-200 dark:border-red-900">
             <CardHeader>
               <CardTitle className="text-red-600">Zona de Peligro</CardTitle>
               <CardDescription>
-                Desconectar Stripe detendrá la sincronización de datos. Los datos
-                ya sincronizados se conservarán.
+                Desconectar Stripe detendrá la sincronización de datos. Los datos ya sincronizados se conservarán.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -348,53 +336,85 @@ export default function StripeSettingsPage() {
                 onClick={handleDisconnect}
                 disabled={disconnecting}
               >
-                {disconnecting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <XCircle className="mr-2 h-4 w-4" />
-                )}
+                {disconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
                 Desconectar Stripe
               </Button>
             </CardContent>
           </Card>
         </div>
       ) : (
-        // ─── Not Connected State ──────────────────────────────────
+        // ─── Not Connected State ──────────────────────────────────────────
         <div className="space-y-8">
-          {/* Hero Card */}
+          {/* Hero */}
           <Card className="overflow-hidden">
             <div className="bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent">
               <CardContent className="flex flex-col items-center text-center py-12 px-6">
                 <div className="rounded-2xl bg-primary/10 p-4 mb-6">
                   <CreditCard className="h-10 w-10 text-primary" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">
-                  Vincula tu cuenta de Stripe
-                </h2>
+                <h2 className="text-2xl font-bold mb-2">Vincula tu cuenta de Stripe</h2>
                 <p className="text-muted-foreground max-w-lg mb-8">
-                  Al conectar Stripe vamos a poder mostrarte los dashboards de
-                  suscripciones, desuscripciones, disputas, Early Fraud Warning
-                  y mucho más. Todo sincronizado en tiempo real.
+                  Al conectar Stripe podés visualizar dashboards de suscripciones, gestionar disputas, Early Fraud Warnings y automatizar acciones. Todo sincronizado en tiempo real.
                 </p>
-                <Button size="lg" asChild>
-                  <Link href="/api/stripe/connect">
-                    <LinkIcon className="mr-2 h-5 w-5" />
-                    Conectar Stripe
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <p className="text-xs text-muted-foreground mt-4">
-                  Usamos OAuth de Stripe Connect. No almacenamos tu contraseña.
-                </p>
+
+                {/* Connection Method Selector */}
+                {connectMethod === null && (
+                  <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                    <Button size="lg" className="flex-1" asChild>
+                      <Link href="/api/stripe/connect">
+                        <LinkIcon className="mr-2 h-5 w-5" />
+                        Conectar con OAuth
+                      </Link>
+                    </Button>
+                    <Button size="lg" variant="outline" className="flex-1" onClick={() => setConnectMethod("apikey")}>
+                      <Key className="mr-2 h-5 w-5" />
+                      Conectar con API Key
+                    </Button>
+                  </div>
+                )}
+
+                {/* API Key Form */}
+                {connectMethod === "apikey" && (
+                  <div className="w-full max-w-md space-y-4 text-left">
+                    <div className="space-y-1">
+                      <label className="text-sm font-semibold">Restricted API Key de Stripe</label>
+                      <p className="text-xs text-muted-foreground">
+                        En tu dashboard de Stripe → Developers → API keys → Create restricted key. Habilitá permisos de <strong>Read</strong> en Customers, Subscriptions, Invoices, Disputes y <strong>Write</strong> en Webhook Endpoints.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="sk_live_... o rk_live_..."
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleApiKeyConnect()}
+                        className="font-mono text-xs"
+                        autoFocus
+                      />
+                      <Button onClick={handleApiKeyConnect} disabled={connectingApiKey || !apiKey.trim()}>
+                        {connectingApiKey ? <Loader2 className="h-4 w-4 animate-spin" /> : "Conectar"}
+                      </Button>
+                    </div>
+                    <Button variant="ghost" size="sm" className="w-full" onClick={() => setConnectMethod(null)}>
+                      ← Volver
+                    </Button>
+                  </div>
+                )}
+
+                {/* OAuth description */}
+                {connectMethod === null && (
+                  <p className="text-xs text-muted-foreground mt-4">
+                    OAuth: 1 clic, sin copiar keys — API Key: ideal si preferís control total sobre los permisos.
+                  </p>
+                )}
               </CardContent>
             </div>
           </Card>
 
           {/* Features Grid */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">
-              ¿Qué podrás hacer con Stripe conectado?
-            </h3>
+            <h3 className="text-lg font-semibold mb-4">¿Qué podrás hacer con Stripe conectado?</h3>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((feature) => {
                 const Icon = feature.icon;
@@ -405,15 +425,11 @@ export default function StripeSettingsPage() {
                         <div className="rounded-lg bg-primary/10 p-2">
                           <Icon className="h-4 w-4 text-primary" />
                         </div>
-                        <CardTitle className="text-base">
-                          {feature.title}
-                        </CardTitle>
+                        <CardTitle className="text-base">{feature.title}</CardTitle>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        {feature.description}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{feature.description}</p>
                     </CardContent>
                   </Card>
                 );
@@ -421,49 +437,24 @@ export default function StripeSettingsPage() {
             </div>
           </div>
 
-          {/* How it Works */}
+          {/* How it works */}
           <Card>
-            <CardHeader>
-              <CardTitle>¿Cómo funciona?</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>¿Cómo funciona?</CardTitle></CardHeader>
             <CardContent>
               <div className="grid gap-6 md:grid-cols-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    1
+                {[
+                  { n: 1, title: "Elegí cómo conectar", desc: "OAuth (1 clic) o API Key restringida si preferís control total sobre los permisos." },
+                  { n: 2, title: "Sincronización inicial", desc: "Importamos tus clientes y suscripciones actuales automáticamente." },
+                  { n: 3, title: "Eventos en tiempo real", desc: "El webhook registrado automáticamente dispara acciones en cuanto ocurre algo en Stripe." },
+                ].map(({ n, title, desc }) => (
+                  <div key={n} className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">{n}</div>
+                    <div>
+                      <h4 className="font-medium">{title}</h4>
+                      <p className="text-sm text-muted-foreground mt-1">{desc}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium">Autoriza la conexión</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Haz click en &quot;Conectar Stripe&quot; y autoriza el acceso desde
-                      tu cuenta de Stripe.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Sincronización inicial</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Importamos tus clientes y suscripciones actuales
-                      automáticamente.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Configura los webhooks</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Agrega nuestra URL de webhook en Stripe para recibir
-                      eventos en tiempo real.
-                    </p>
-                  </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>

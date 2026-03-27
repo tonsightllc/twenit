@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investigación: Caída de Conversiones Post-Trial</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --surface-alt: #f3f0ec;
+  --text: #1a1815;
+  --text-muted: #7a756d;
+  --accent-red: #d63031;
+  --accent-red-light: #fff0f0;
+  --accent-green: #00b894;
+  --accent-green-light: #e8faf5;
+  --accent-blue: #0984e3;
+  --accent-amber: #e17055;
+  --accent-amber-light: #fff5f0;
+  --accent-purple: #6c5ce7;
+  --border: #e8e4de;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.06);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+/* Header */
+.header {
+  padding: 56px 0 40px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 40px;
+}
+
+.header-tag {
+  display: inline-block;
+  background: var(--accent-red-light);
+  color: var(--accent-red);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 6px 16px;
+  border-radius: 100px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  font-family: 'Instrument Serif', serif;
+  font-size: 3.4rem;
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.header h1 em {
+  font-style: italic;
+  color: var(--accent-red);
+}
+
+.header .subtitle {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+/* Key Finding Alert */
+.alert-box {
+  background: linear-gradient(135deg, #d63031 0%, #e17055 100%);
+  color: white;
+  border-radius: 20px;
+  padding: 36px 40px;
+  margin-bottom: 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 32px;
+  box-shadow: 0 8px 32px rgba(214, 48, 49, 0.2);
+}
+
+.alert-item {
+  text-align: center;
+}
+
+.alert-item .alert-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+
+.alert-item .alert-value {
+  font-family: 'Instrument Serif', serif;
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.alert-item .alert-detail {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+/* Section */
+.section {
+  margin-bottom: 48px;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-number {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.4rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+
+.card-lg {
+  padding: 36px 40px;
+}
+
+/* Chart container */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 340px;
+}
+
+.chart-container.tall {
+  height: 400px;
+}
+
+/* Grid layouts */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+/* Stat cards */
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.stat-card .stat-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.stat-card .stat-value {
+  font-family: 'Instrument Serif', serif;
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.stat-card .stat-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.stat-card.red { border-left: 4px solid var(--accent-red); }
+.stat-card.green { border-left: 4px solid var(--accent-green); }
+.stat-card.blue { border-left: 4px solid var(--accent-blue); }
+.stat-card.amber { border-left: 4px solid var(--accent-amber); }
+.stat-card.red .stat-value { color: var(--accent-red); }
+.stat-card.green .stat-value { color: var(--accent-green); }
+.stat-card.blue .stat-value { color: var(--accent-blue); }
+.stat-card.amber .stat-value { color: var(--accent-amber); }
+
+/* Findings */
+.finding {
+  background: var(--surface-alt);
+  border-radius: 14px;
+  padding: 28px 32px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.finding-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.finding-icon.red { background: var(--accent-red-light); }
+.finding-icon.amber { background: var(--accent-amber-light); }
+.finding-icon.green { background: var(--accent-green-light); }
+
+.finding h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.finding p {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.data-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border);
+}
+
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.pct-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-alt);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.pct-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s ease;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-red { background: var(--accent-red-light); color: var(--accent-red); }
+.badge-green { background: var(--accent-green-light); color: var(--accent-green); }
+.badge-amber { background: var(--accent-amber-light); color: var(--accent-amber); }
+
+.footer {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="header">
+  <div class="header-tag">Investigaci&oacute;n Stripe</div>
+  <h1>Ca&iacute;da de conversiones <em>post-trial</em></h1>
+  <p class="subtitle">An&aacute;lisis de 1,459 suscripciones creadas entre el 26 Ene y 27 Mar 2026 &mdash; 60 d&iacute;as de datos</p>
+</div>
+
+<!-- ALERT BOX -->
+<div class="alert-box">
+  <div class="alert-item">
+    <div class="alert-label">Tasa de fallo en cobros</div>
+    <div class="alert-value">62% &rarr; 80%</div>
+    <div class="alert-detail">Salt&oacute; a partir de Marzo</div>
+  </div>
+  <div class="alert-item">
+    <div class="alert-label">&Eacute;xito primer cobro post-trial</div>
+    <div class="alert-value">65% &rarr; 35%</div>
+    <div class="alert-detail">Promedio &uacute;ltimas 2 semanas</div>
+  </div>
+  <div class="alert-item">
+    <div class="alert-label">Suscripciones/semana</div>
+    <div class="alert-value">180 &rarr; 135</div>
+    <div class="alert-detail">-25% en creaci&oacute;n</div>
+  </div>
+</div>
+
+<!-- SECTION 1: Conversion Rate -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">01</span>
+    <span class="section-title">Tasa de conversi&oacute;n post-trial (por d&iacute;a)</span>
+  </div>
+  <div class="card card-lg">
+    <div class="chart-container tall">
+      <canvas id="conversionChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2: First Charge Success -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">02</span>
+    <span class="section-title">% &eacute;xito del primer intento de cobro &mdash; evoluci&oacute;n 60 d&iacute;as</span>
+  </div>
+  <div class="card card-lg">
+    <div class="chart-container tall">
+      <canvas id="firstChargeChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: Volume -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">03</span>
+    <span class="section-title">Volumen de suscripciones creadas por semana</span>
+  </div>
+  <div class="card card-lg">
+    <div class="chart-container">
+      <canvas id="volumeChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: Failure Rate Comparison -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">04</span>
+    <span class="section-title">Tasa de fallo por per&iacute;odo</span>
+  </div>
+  <div class="grid-4" id="periodStats"></div>
+  <div style="height:24px"></div>
+  <div class="card card-lg">
+    <div class="chart-container">
+      <canvas id="failureCompChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: Decline Reasons -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">05</span>
+    <span class="section-title">Evoluci&oacute;n de motivos de rechazo</span>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="font-size:1rem;margin-bottom:16px;">Feb 1-15 (per&iacute;odo bueno)</h3>
+      <div id="reasons-good"></div>
+    </div>
+    <div class="card">
+      <h3 style="font-size:1rem;margin-bottom:16px;">Mar 15-26 (per&iacute;odo malo)</h3>
+      <div id="reasons-bad"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 6: Diagnosis -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">06</span>
+    <span class="section-title">Diagn&oacute;stico y posibles causas</span>
+  </div>
+
+  <div class="finding">
+    <div class="finding-icon red">1</div>
+    <div>
+      <h4>Cambio en manejo de pagos fallidos (~28 Feb)</h4>
+      <p>Antes de fin de febrero, las suscripciones con pago fallido se <strong>cancelaban autom&aacute;ticamente</strong>. Despu&eacute;s, pasan a estado <strong>past_due</strong> y se reintentan. Esto genera m&aacute;s reintentos sobre tarjetas ya rechazadas, inflando la tasa de fallo total y los "do_not_honor" / "previously_declined".</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="finding-icon red">2</div>
+    <div>
+      <h4>Acumulaci&oacute;n de reintentos fallidos</h4>
+      <p>Las suscripciones past_due siguen generando cobros fallidos cada d&iacute;a. En Feb hab&iacute;a ~800 cobros/quincena, ahora hay ~1,500-1,700. El 80% de esos cobros son reintentos sobre tarjetas que ya fallaron, NO nuevos clientes.</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="finding-icon amber">3</div>
+    <div>
+      <h4>Ca&iacute;da real en conversi&oacute;n de nuevos clientes</h4>
+      <p>Separando solo el <strong>primer intento de cobro</strong> por cliente, la tasa de &eacute;xito baj&oacute; de ~65% (Feb) a ~35% (Mar). Esto sugiere un problema real: los nuevos clientes est&aacute;n fallando m&aacute;s al intentar pagar por primera vez.</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="finding-icon amber">4</div>
+    <div>
+      <h4>Ca&iacute;da de volumen de nuevas suscripciones</h4>
+      <p>Las suscripciones creadas por semana bajaron de ~180 a ~135 (-25%). Menos gente est&aacute; iniciando trials, y de los que inician, menos logran pagar.</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="finding-icon green">5</div>
+    <div>
+      <h4>Posibles l&iacute;neas de investigaci&oacute;n</h4>
+      <p>&bull; Verificar si cambi&oacute; la configuraci&oacute;n de <strong>Smart Retries</strong> o el n&uacute;mero de reintentos en Stripe Dashboard<br>
+         &bull; Revisar si hubo cambios en el frontend/checkout que afecten la captura del m&eacute;todo de pago<br>
+         &bull; Verificar si 3D Secure / SCA est&aacute; causando abandonos durante el trial<br>
+         &bull; Analizar si hay cambios en la geograf&iacute;a o perfil de los nuevos usuarios<br>
+         &bull; Considerar ajustar las reglas de dunning para cancelar subs past_due despu&eacute;s de X reintentos fallidos</p>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 7: Daily Detail Table -->
+<div class="section">
+  <div class="section-header">
+    <span class="section-number">07</span>
+    <span class="section-title">Detalle diario: conversi&oacute;n post-trial y primer cobro</span>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <table class="data-table" id="dailyTable">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Trials terminados</th>
+          <th>Convertidos</th>
+          <th>% Conversi&oacute;n</th>
+          <th>Past Due</th>
+          <th>Cancelados</th>
+          <th>Primer cobro OK</th>
+          <th>% Primer cobro</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="footer">
+  Datos extra&iacute;dos de Stripe API &mdash; 27 de Marzo de 2026
+</div>
+
+</div>
+
+<script>
+// ====== DATA ======
+const CONVERSION_DATA = {
+  "2026-01-27": {total:23,converted:4,past_due:6,canceled:13},
+  "2026-01-28": {total:29,converted:10,past_due:2,canceled:17},
+  "2026-01-29": {total:25,converted:6,past_due:0,canceled:19},
+  "2026-01-30": {total:25,converted:6,past_due:4,canceled:15},
+  "2026-01-31": {total:31,converted:10,past_due:1,canceled:20},
+  "2026-02-01": {total:22,converted:11,past_due:3,canceled:8},
+  "2026-02-02": {total:21,converted:5,past_due:2,canceled:14},
+  "2026-02-03": {total:34,converted:6,past_due:5,canceled:23},
+  "2026-02-04": {total:23,converted:8,past_due:1,canceled:14},
+  "2026-02-05": {total:35,converted:6,past_due:5,canceled:24},
+  "2026-02-06": {total:16,converted:3,past_due:2,canceled:11},
+  "2026-02-07": {total:18,converted:8,past_due:1,canceled:9},
+  "2026-02-08": {total:12,converted:2,past_due:0,canceled:10},
+  "2026-02-09": {total:32,converted:7,past_due:4,canceled:21},
+  "2026-02-10": {total:19,converted:5,past_due:2,canceled:12},
+  "2026-02-11": {total:40,converted:10,past_due:2,canceled:28},
+  "2026-02-12": {total:22,converted:7,past_due:0,canceled:15},
+  "2026-02-13": {total:36,converted:13,past_due:5,canceled:18},
+  "2026-02-14": {total:23,converted:8,past_due:4,canceled:11},
+  "2026-02-15": {total:17,converted:7,past_due:4,canceled:6},
+  "2026-02-16": {total:25,converted:6,past_due:8,canceled:11},
+  "2026-02-17": {total:34,converted:18,past_due:2,canceled:14},
+  "2026-02-18": {total:26,converted:7,past_due:2,canceled:17},
+  "2026-02-19": {total:27,converted:12,past_due:3,canceled:12},
+  "2026-02-20": {total:32,converted:11,past_due:4,canceled:17},
+  "2026-02-21": {total:31,converted:11,past_due:5,canceled:15},
+  "2026-02-22": {total:33,converted:8,past_due:8,canceled:17},
+  "2026-02-23": {total:27,converted:4,past_due:4,canceled:19},
+  "2026-02-24": {total:18,converted:6,past_due:3,canceled:9},
+  "2026-02-25": {total:32,converted:6,past_due:8,canceled:18},
+  "2026-02-26": {total:26,converted:2,past_due:9,canceled:15},
+  "2026-02-27": {total:32,converted:3,past_due:8,canceled:21},
+  "2026-02-28": {total:26,converted:9,past_due:13,canceled:4},
+  "2026-03-01": {total:23,converted:9,past_due:13,canceled:1},
+  "2026-03-02": {total:16,converted:7,past_due:7,canceled:2},
+  "2026-03-03": {total:20,converted:5,past_due:14,canceled:1},
+  "2026-03-04": {total:28,converted:12,past_due:14,canceled:2},
+  "2026-03-05": {total:38,converted:15,past_due:19,canceled:4},
+  "2026-03-06": {total:24,converted:12,past_due:7,canceled:5},
+  "2026-03-07": {total:23,converted:6,past_due:15,canceled:2},
+  "2026-03-08": {total:31,converted:11,past_due:19,canceled:1},
+  "2026-03-09": {total:16,converted:5,past_due:9,canceled:2},
+  "2026-03-10": {total:21,converted:6,past_due:14,canceled:1},
+  "2026-03-11": {total:18,converted:5,past_due:12,canceled:1},
+  "2026-03-12": {total:14,converted:7,past_due:6,canceled:1},
+  "2026-03-13": {total:18,converted:6,past_due:12,canceled:0},
+  "2026-03-14": {total:27,converted:9,past_due:17,canceled:1},
+  "2026-03-15": {total:19,converted:5,past_due:10,canceled:4},
+  "2026-03-16": {total:18,converted:6,past_due:12,canceled:0},
+  "2026-03-17": {total:24,converted:6,past_due:16,canceled:2},
+  "2026-03-18": {total:23,converted:10,past_due:12,canceled:1},
+  "2026-03-19": {total:27,converted:8,past_due:19,canceled:0},
+  "2026-03-20": {total:30,converted:8,past_due:19,canceled:3},
+  "2026-03-21": {total:2,converted:0,past_due:2,canceled:0},
+  "2026-03-22": {total:24,converted:10,past_due:13,canceled:1},
+  "2026-03-23": {total:14,converted:7,past_due:6,canceled:1},
+  "2026-03-24": {total:14,converted:6,past_due:8,canceled:0},
+  "2026-03-25": {total:21,converted:3,past_due:17,canceled:1},
+  "2026-03-26": {total:30,converted:1,past_due:28,canceled:1},
+};
+
+const FIRST_CHARGE_DATA = {
+  "2026-01-26":{total:8,paid:6},
+  "2026-01-27":{total:32,paid:25},
+  "2026-01-28":{total:34,paid:20},
+  "2026-01-29":{total:28,paid:14},
+  "2026-01-30":{total:32,paid:22},
+  "2026-01-31":{total:42,paid:24},
+  "2026-02-01":{total:28,paid:21},
+  "2026-02-02":{total:32,paid:17},
+  "2026-02-03":{total:42,paid:25},
+  "2026-02-04":{total:30,paid:18},
+  "2026-02-05":{total:42,paid:26},
+  "2026-02-06":{total:27,paid:18},
+  "2026-02-07":{total:32,paid:21},
+  "2026-02-08":{total:23,paid:13},
+  "2026-02-09":{total:46,paid:26},
+  "2026-02-10":{total:25,paid:15},
+  "2026-02-11":{total:49,paid:28},
+  "2026-02-12":{total:33,paid:21},
+  "2026-02-13":{total:50,paid:36},
+  "2026-02-14":{total:37,paid:24},
+  "2026-02-15":{total:28,paid:21},
+  "2026-02-16":{total:38,paid:27},
+  "2026-02-17":{total:52,paid:38},
+  "2026-02-18":{total:29,paid:16},
+  "2026-02-19":{total:35,paid:23},
+  "2026-02-20":{total:48,paid:32},
+  "2026-02-21":{total:42,paid:28},
+  "2026-02-22":{total:46,paid:31},
+  "2026-02-23":{total:42,paid:22},
+  "2026-02-24":{total:30,paid:19},
+  "2026-02-25":{total:41,paid:28},
+  "2026-02-26":{total:26,paid:16},
+  "2026-02-27":{total:31,paid:15},
+  "2026-02-28":{total:25,paid:12},
+  "2026-03-01":{total:22,paid:9},
+  "2026-03-02":{total:15,paid:8},
+  "2026-03-03":{total:20,paid:6},
+  "2026-03-04":{total:28,paid:14},
+  "2026-03-05":{total:38,paid:19},
+  "2026-03-06":{total:24,paid:17},
+  "2026-03-07":{total:21,paid:8},
+  "2026-03-08":{total:31,paid:12},
+  "2026-03-09":{total:16,paid:7},
+  "2026-03-10":{total:20,paid:7},
+  "2026-03-11":{total:18,paid:6},
+  "2026-03-12":{total:13,paid:7},
+  "2026-03-13":{total:17,paid:6},
+  "2026-03-14":{total:26,paid:9},
+  "2026-03-15":{total:19,paid:9},
+  "2026-03-16":{total:18,paid:6},
+  "2026-03-17":{total:23,paid:8},
+  "2026-03-18":{total:23,paid:11},
+  "2026-03-19":{total:25,paid:7},
+  "2026-03-20":{total:29,paid:11},
+  "2026-03-21":{total:2,paid:0},
+  "2026-03-22":{total:23,paid:10},
+  "2026-03-23":{total:14,paid:8},
+  "2026-03-24":{total:14,paid:6},
+  "2026-03-25":{total:20,paid:3},
+  "2026-03-26":{total:27,paid:1},
+};
+
+const VOLUME_DATA = {
+  "2026-01-26": 176,
+  "2026-02-02": 170,
+  "2026-02-09": 182,
+  "2026-02-16": 210,
+  "2026-02-23": 173,
+  "2026-03-02": 180,
+  "2026-03-09": 135,
+  "2026-03-16": 144,
+  "2026-03-23": 89,
+};
+
+const PERIOD_DATA = [
+  {name:"Feb 1-15", total:808, failed:501, reasons:{"do_not_honor":218,"card_velocity_exceeded":82,"insufficient_funds":74,"generic_decline":25,"previously_declined":22,"blocklist":14,"transaction_not_allowed":13,"try_again_later":12,"otros":41}},
+  {name:"Feb 16-28", total:1080, failed:700, reasons:{"do_not_honor":345,"insufficient_funds":101,"card_velocity_exceeded":99,"previously_declined":34,"transaction_not_allowed":31,"try_again_later":19,"invalid_account":15,"stolen_card":14,"otros":43}},
+  {name:"Mar 1-14", total:1705, failed:1370, reasons:{"do_not_honor":753,"insufficient_funds":139,"previously_declined":128,"card_velocity_exceeded":111,"generic_decline":66,"transaction_not_allowed":39,"try_again_later":34,"stolen_card":33,"otros":67}},
+  {name:"Mar 15-26", total:1500, failed:1208, reasons:{"do_not_honor":707,"previously_declined":102,"card_velocity_exceeded":99,"insufficient_funds":90,"generic_decline":44,"try_again_later":34,"transaction_not_allowed":32,"invalid_account":23,"otros":77}},
+];
+
+const REASON_COLORS = {
+  "do_not_honor":"#d63031",
+  "insufficient_funds":"#f59e0b",
+  "card_velocity_exceeded":"#3b82f6",
+  "previously_declined":"#8b5cf6",
+  "generic_decline":"#f97316",
+  "transaction_not_allowed":"#10b981",
+  "try_again_later":"#06b6d4",
+  "invalid_account":"#6366f1",
+  "stolen_card":"#ef4444",
+  "blocklist":"#1e293b",
+  "otros":"#94a3b8",
+};
+
+const REASON_LABELS = {
+  "do_not_honor":"No honrar (banco)",
+  "insufficient_funds":"Fondos insuficientes",
+  "card_velocity_exceeded":"Lím. velocidad",
+  "previously_declined":"Declinado previamente",
+  "generic_decline":"Rechazo genérico",
+  "transaction_not_allowed":"Trans. no permitida",
+  "try_again_later":"Reintentar más tarde",
+  "invalid_account":"Cuenta inválida",
+  "stolen_card":"Tarjeta robada",
+  "blocklist":"Lista negra",
+  "otros":"Otros",
+};
+
+// ====== CHART DEFAULTS ======
+Chart.defaults.font.family = "'Outfit', sans-serif";
+Chart.defaults.color = '#7a756d';
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+
+function formatDate(d) {
+  const parts = d.split('-');
+  return `${parseInt(parts[2])}/${parseInt(parts[1])}`;
+}
+
+// ====== CHART 1: Conversion Rate ======
+const convDates = Object.keys(CONVERSION_DATA).sort();
+const convRates = convDates.map(d => {
+  const v = CONVERSION_DATA[d];
+  return v.total > 2 ? (v.converted / v.total * 100) : null;
+});
+
+// 7-day moving average
+const convMA = convRates.map((_, i) => {
+  let sum = 0, count = 0;
+  for (let j = Math.max(0, i-6); j <= i; j++) {
+    if (convRates[j] !== null) { sum += convRates[j]; count++; }
+  }
+  return count >= 3 ? sum / count : null;
+});
+
+new Chart(document.getElementById('conversionChart'), {
+  type: 'line',
+  data: {
+    labels: convDates.map(formatDate),
+    datasets: [
+      {
+        label: '% Conversión diario',
+        data: convRates,
+        borderColor: 'rgba(214,48,49,0.25)',
+        backgroundColor: 'rgba(214,48,49,0.05)',
+        borderWidth: 1.5,
+        pointRadius: 3,
+        pointBackgroundColor: convRates.map(v => v !== null && v < 20 ? '#d63031' : 'rgba(214,48,49,0.4)'),
+        tension: 0.1,
+        fill: false,
+      },
+      {
+        label: 'Media móvil 7 días',
+        data: convMA,
+        borderColor: '#d63031',
+        borderWidth: 3,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 60,
+        ticks: { callback: v => v + '%' },
+        title: { display: true, text: '% Conversión (trial → activo)' },
+        grid: { color: 'rgba(0,0,0,0.04)' }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { maxTicksLimit: 15 }
+      }
+    },
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}%`
+        }
+      },
+      annotation: {
+        annotations: {
+          line1: {
+            type: 'line',
+            xMin: convDates.map(formatDate).indexOf(formatDate('2026-02-28')),
+            xMax: convDates.map(formatDate).indexOf(formatDate('2026-02-28')),
+            borderColor: 'rgba(99,102,241,0.5)',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            label: {
+              display: true,
+              content: 'Cambio billing ~28 Feb',
+              position: 'start',
+              backgroundColor: 'rgba(99,102,241,0.1)',
+              color: '#6366f1',
+              font: { size: 11 }
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
+// ====== CHART 2: First Charge Success ======
+const fcDates = Object.keys(FIRST_CHARGE_DATA).sort();
+const fcRates = fcDates.map(d => {
+  const v = FIRST_CHARGE_DATA[d];
+  return v.total > 2 ? (v.paid / v.total * 100) : null;
+});
+
+const fcMA = fcRates.map((_, i) => {
+  let sum = 0, count = 0;
+  for (let j = Math.max(0, i-6); j <= i; j++) {
+    if (fcRates[j] !== null) { sum += fcRates[j]; count++; }
+  }
+  return count >= 3 ? sum / count : null;
+});
+
+new Chart(document.getElementById('firstChargeChart'), {
+  type: 'line',
+  data: {
+    labels: fcDates.map(formatDate),
+    datasets: [
+      {
+        label: '% Éxito diario',
+        data: fcRates,
+        borderColor: 'rgba(9,132,227,0.2)',
+        backgroundColor: 'rgba(9,132,227,0.05)',
+        borderWidth: 1.5,
+        pointRadius: 3,
+        pointBackgroundColor: fcRates.map(v => v !== null && v < 40 ? '#d63031' : 'rgba(9,132,227,0.4)'),
+        tension: 0.1,
+        fill: true,
+      },
+      {
+        label: 'Media móvil 7 días',
+        data: fcMA,
+        borderColor: '#0984e3',
+        borderWidth: 3,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        ticks: { callback: v => v + '%' },
+        title: { display: true, text: '% Éxito primer cobro post-trial' },
+        grid: { color: 'rgba(0,0,0,0.04)' }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { maxTicksLimit: 15 }
+      }
+    },
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const date = fcDates[ctx.dataIndex];
+            const d = FIRST_CHARGE_DATA[date];
+            if (ctx.datasetIndex === 0 && d) {
+              return ` ${d.paid}/${d.total} pagados (${ctx.parsed.y?.toFixed(1)}%)`;
+            }
+            return ` Media: ${ctx.parsed.y?.toFixed(1)}%`;
+          }
+        }
+      },
+      annotation: {
+        annotations: {
+          line1: {
+            type: 'line',
+            xMin: fcDates.map(formatDate).indexOf(formatDate('2026-02-28')),
+            xMax: fcDates.map(formatDate).indexOf(formatDate('2026-02-28')),
+            borderColor: 'rgba(99,102,241,0.5)',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            label: {
+              display: true,
+              content: '~28 Feb',
+              position: 'start',
+              backgroundColor: 'rgba(99,102,241,0.1)',
+              color: '#6366f1',
+              font: { size: 11 }
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
+// ====== CHART 3: Volume ======
+const volWeeks = Object.keys(VOLUME_DATA).sort();
+const volValues = volWeeks.map(w => VOLUME_DATA[w]);
+
+new Chart(document.getElementById('volumeChart'), {
+  type: 'bar',
+  data: {
+    labels: volWeeks.map(w => 'Sem ' + formatDate(w)),
+    datasets: [{
+      label: 'Suscripciones creadas',
+      data: volValues,
+      backgroundColor: volValues.map(v => v < 150 ? 'rgba(214,48,49,0.7)' : 'rgba(9,132,227,0.6)'),
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: { display: true, text: 'Suscripciones / semana' },
+        grid: { color: 'rgba(0,0,0,0.04)' }
+      },
+      x: { grid: { display: false } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.parsed.y} suscripciones`
+        }
+      }
+    }
+  }
+});
+
+// ====== CHART 4: Period Stats ======
+const periodStats = document.getElementById('periodStats');
+PERIOD_DATA.forEach((p, i) => {
+  const failRate = (p.failed / p.total * 100).toFixed(1);
+  const isLast = i >= 2;
+  const card = document.createElement('div');
+  card.className = `stat-card ${isLast ? 'red' : 'blue'}`;
+  card.innerHTML = `
+    <div class="stat-label">${p.name}</div>
+    <div class="stat-value">${failRate}%</div>
+    <div class="stat-sub">${p.failed} de ${p.total} cobros fallaron</div>
+  `;
+  periodStats.appendChild(card);
+});
+
+// Stacked bar chart for decline reasons by period
+const reasonKeys = Object.keys(REASON_COLORS);
+const reasonDatasets = reasonKeys.map(key => ({
+  label: REASON_LABELS[key] || key,
+  data: PERIOD_DATA.map(p => p.reasons[key] || 0),
+  backgroundColor: REASON_COLORS[key],
+  borderRadius: 2,
+}));
+
+new Chart(document.getElementById('failureCompChart'), {
+  type: 'bar',
+  data: {
+    labels: PERIOD_DATA.map(p => p.name),
+    datasets: reasonDatasets,
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { stacked: true, grid: { display: false } },
+      y: {
+        stacked: true,
+        title: { display: true, text: 'Cobros fallidos' },
+        grid: { color: 'rgba(0,0,0,0.04)' }
+      }
+    },
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { boxWidth: 12, padding: 16, font: { size: 11 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const total = PERIOD_DATA[ctx.dataIndex].failed;
+            const pct = (ctx.raw / total * 100).toFixed(1);
+            return ` ${ctx.dataset.label}: ${ctx.raw} (${pct}%)`;
+          }
+        }
+      }
+    }
+  }
+});
+
+// ====== Decline Reason Tables ======
+function renderReasons(containerId, periodIdx) {
+  const container = document.getElementById(containerId);
+  const p = PERIOD_DATA[periodIdx];
+  const sorted = Object.entries(p.reasons).sort((a,b) => b[1] - a[1]);
+  
+  sorted.forEach(([key, count]) => {
+    const pct = (count / p.failed * 100).toFixed(1);
+    const label = REASON_LABELS[key] || key;
+    const color = REASON_COLORS[key] || '#94a3b8';
+    
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);';
+    row.innerHTML = `
+      <div style="width:10px;height:10px;border-radius:3px;background:${color};flex-shrink:0;"></div>
+      <div style="flex:1;font-size:0.88rem;">${label}</div>
+      <div style="font-weight:600;font-size:0.88rem;min-width:36px;text-align:right;">${count}</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);min-width:48px;text-align:right;">${pct}%</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+renderReasons('reasons-good', 0);
+renderReasons('reasons-bad', 3);
+
+// ====== Daily Table ======
+const allDates = [...new Set([...Object.keys(CONVERSION_DATA), ...Object.keys(FIRST_CHARGE_DATA)])].sort();
+const tbody = document.querySelector('#dailyTable tbody');
+
+allDates.forEach(date => {
+  const conv = CONVERSION_DATA[date];
+  const fc = FIRST_CHARGE_DATA[date];
+  if (!conv && !fc) return;
+  
+  const convRate = conv && conv.total > 2 ? (conv.converted / conv.total * 100).toFixed(1) : '—';
+  const fcRate = fc && fc.total > 2 ? (fc.paid / fc.total * 100).toFixed(1) : '—';
+  
+  const convBadge = convRate !== '—'
+    ? (parseFloat(convRate) >= 35 ? 'badge-green' : parseFloat(convRate) >= 20 ? 'badge-amber' : 'badge-red')
+    : '';
+  const fcBadge = fcRate !== '—'
+    ? (parseFloat(fcRate) >= 60 ? 'badge-green' : parseFloat(fcRate) >= 40 ? 'badge-amber' : 'badge-red')
+    : '';
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="font-weight:600;">${formatDate(date)}</td>
+    <td>${conv ? conv.total : '—'}</td>
+    <td>${conv ? conv.converted : '—'}</td>
+    <td><span class="badge ${convBadge}">${convRate}%</span></td>
+    <td>${conv ? conv.past_due : '—'}</td>
+    <td>${conv ? conv.canceled : '—'}</td>
+    <td>${fc ? fc.paid + '/' + fc.total : '—'}</td>
+    <td><span class="badge ${fcBadge}">${fcRate}%</span></td>
+  `;
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>

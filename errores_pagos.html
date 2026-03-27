@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Errores de Pago - Suscripciones Stripe</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface-hover: #24243a;
+  --text: #e8e6f0;
+  --text-muted: #8a88a0;
+  --accent: #ff4d6a;
+  --accent2: #6366f1;
+  --border: #2a2a3d;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.noise {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.header {
+  padding: 48px 48px 24px;
+  position: relative;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.header h1 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 2.8rem;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #fff 0%, #a5a3c0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+
+.header .subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header .subtitle .badge {
+  background: rgba(255,77,106,0.15);
+  color: var(--accent);
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.summary-bar {
+  display: flex;
+  gap: 24px;
+  padding: 0 48px;
+  margin: 24px 0 32px;
+  flex-wrap: wrap;
+}
+
+.summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 28px;
+  min-width: 160px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: fadeUp 0.6s ease-out both;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(99,102,241,0.12);
+}
+
+.summary-card .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.summary-card .value {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--accent);
+}
+
+.summary-card .value.blue { color: var(--accent2); }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 0 48px 32px;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeUp 0.6s ease-out both;
+}
+
+.chart-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  opacity: 0.6;
+}
+
+.chart-card.total-card::before {
+  height: 4px;
+  opacity: 1;
+  background: linear-gradient(90deg, var(--accent), #f59e0b, var(--accent2));
+}
+
+.chart-card .chart-title {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.chart-card .chart-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.total-section {
+  padding: 0 48px 48px;
+}
+
+.total-card-big {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 36px;
+  display: flex;
+  gap: 48px;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  animation: fadeUp 0.6s ease-out both;
+}
+
+.total-card-big::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), #f59e0b, var(--accent2), #10b981);
+}
+
+.total-chart-wrapper {
+  width: 380px;
+  flex-shrink: 0;
+}
+
+.total-breakdown {
+  flex: 1;
+}
+
+.total-breakdown h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem;
+  margin-bottom: 20px;
+  font-weight: 900;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.breakdown-item:last-child { border-bottom: none; }
+
+.breakdown-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.breakdown-label {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.breakdown-value {
+  font-weight: 700;
+  font-size: 0.9rem;
+  min-width: 40px;
+  text-align: right;
+}
+
+.breakdown-pct {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 55px;
+  text-align: right;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<div class="header">
+  <h1>Errores de Pago en Suscripciones</h1>
+  <div class="subtitle">
+    <span>20 Mar — 26 Mar 2026</span>
+    <span class="badge">852 fallos totales</span>
+  </div>
+</div>
+
+<div class="summary-bar" id="summaryBar"></div>
+
+<div class="charts-grid" id="chartsGrid"></div>
+
+<div class="total-section">
+  <div class="total-card-big">
+    <div class="total-chart-wrapper">
+      <canvas id="totalChart"></canvas>
+    </div>
+    <div class="total-breakdown" id="totalBreakdown"></div>
+  </div>
+</div>
+
+<script>
+const DATA = {
+  "2026-03-20": {"No honrar (banco rechazó)":65,"Desconocido":36,"Declinado previamente":15,"Fondos insuficientes":13,"Límite de velocidad":7,"Transacción no permitida":5,"Número incorrecto":3,"Tarjeta perdida":2,"Tarjeta robada":2,"Tarjeta expirada":1,"Reintentar más tarde":1,"Recoger tarjeta":1,"Rechazo genérico":1,"Llamar al emisor":1},
+  "2026-03-21": {"No honrar (banco rechazó)":57,"Desconocido":20,"Límite de velocidad":15,"Declinado previamente":12,"Reintentar más tarde":9,"Fondos insuficientes":9,"Número incorrecto":4,"Cuenta inválida":3,"Rechazo genérico":3,"Tarjeta robada":3,"Recoger tarjeta":2,"Llamar al emisor":1,"Lista negra":1,"Tarjeta perdida":1,"Transacción no permitida":1},
+  "2026-03-22": {"No honrar (banco rechazó)":56,"Desconocido":32,"Fondos insuficientes":10,"Límite de velocidad":7,"Declinado previamente":7,"Número incorrecto":3,"Rechazo genérico":2,"Transacción no permitida":2,"Tarjeta perdida":1,"Cuenta inválida":1,"Tarjeta robada":1},
+  "2026-03-23": {"No honrar (banco rechazó)":60,"Desconocido":25,"Límite de velocidad":10,"Declinado previamente":9,"Fondos insuficientes":7,"Reintentar más tarde":5,"Tarjeta expirada":2,"Transacción no permitida":2,"Rechazo genérico":2,"Cuenta inválida":1,"Tarjeta robada":1,"Tarjeta perdida":1,"Llamar al emisor":1,"Número incorrecto":1},
+  "2026-03-24": {"No honrar (banco rechazó)":38,"Desconocido":23,"Fondos insuficientes":8,"Declinado previamente":6,"Tarjeta perdida":3,"Tarjeta robada":3,"Cuenta inválida":3,"Transacción no permitida":2,"Límite de velocidad":1,"Número incorrecto":1,"Llamar al emisor":1,"Rechazo genérico":1},
+  "2026-03-25": {"No honrar (banco rechazó)":54,"Desconocido":15,"Rechazo genérico":12,"Declinado previamente":9,"Límite de velocidad":8,"Reintentar más tarde":4,"Fondos insuficientes":3,"Tarjeta robada":3,"Tarjeta perdida":2,"Cuenta inválida":2,"Transacción no permitida":1,"Llamar al emisor":1},
+  "2026-03-26": {"No honrar (banco rechazó)":65,"Rechazo genérico":9,"Desconocido":6,"Cuenta inválida":6,"Declinado previamente":5,"Fondos insuficientes":4,"Tarjeta robada":3,"Tarjeta perdida":2,"Límite de velocidad":2,"Transacción no permitida":1,"Reintentar más tarde":1,"Recoger tarjeta":1}
+};
+
+const COLORS = {
+  "No honrar (banco rechazó)": "#ef4444",
+  "Desconocido": "#64748b",
+  "Declinado previamente": "#a855f7",
+  "Fondos insuficientes": "#f59e0b",
+  "Límite de velocidad": "#3b82f6",
+  "Rechazo genérico": "#f97316",
+  "Reintentar más tarde": "#14b8a6",
+  "Cuenta inválida": "#6366f1",
+  "Tarjeta robada": "#dc2626",
+  "Transacción no permitida": "#22c55e",
+  "Tarjeta perdida": "#ea580c",
+  "Número incorrecto": "#94a3b8",
+  "Llamar al emisor": "#0d9488",
+  "Recoger tarjeta": "#2563eb",
+  "Tarjeta expirada": "#eab308",
+  "Lista negra": "#1e293b",
+};
+
+const DAY_NAMES = {
+  "2026-03-20": "Vie 20",
+  "2026-03-21": "Sáb 21",
+  "2026-03-22": "Dom 22",
+  "2026-03-23": "Lun 23",
+  "2026-03-24": "Mar 24",
+  "2026-03-25": "Mié 25",
+  "2026-03-26": "Jue 26",
+};
+
+function getColor(label) {
+  return COLORS[label] || '#6b7280';
+}
+
+function getTotal(obj) {
+  return Object.values(obj).reduce((a, b) => a + b, 0);
+}
+
+// Summary bar
+const summaryBar = document.getElementById('summaryBar');
+const dates = Object.keys(DATA).sort();
+dates.forEach((date, i) => {
+  const total = getTotal(DATA[date]);
+  const card = document.createElement('div');
+  card.className = 'summary-card';
+  card.style.animationDelay = `${i * 0.08}s`;
+  card.innerHTML = `
+    <div class="label">${DAY_NAMES[date]}</div>
+    <div class="value blue">${total}</div>
+  `;
+  summaryBar.appendChild(card);
+});
+
+const totalAll = dates.reduce((s, d) => s + getTotal(DATA[d]), 0);
+const totalCard = document.createElement('div');
+totalCard.className = 'summary-card';
+totalCard.style.animationDelay = `${dates.length * 0.08}s`;
+totalCard.innerHTML = `
+  <div class="label">Total 7 días</div>
+  <div class="value">${totalAll}</div>
+`;
+summaryBar.appendChild(totalCard);
+
+// Daily pie charts
+const chartsGrid = document.getElementById('chartsGrid');
+dates.forEach((date, idx) => {
+  const dayData = DATA[date];
+  const total = getTotal(dayData);
+  const sorted = Object.entries(dayData).sort((a, b) => b[1] - a[1]);
+
+  const card = document.createElement('div');
+  card.className = 'chart-card';
+  card.style.animationDelay = `${(idx + 1) * 0.1}s`;
+  card.innerHTML = `
+    <div class="chart-title">${DAY_NAMES[date]} de Marzo</div>
+    <div class="chart-count">${total} fallos</div>
+    <div class="chart-wrapper"><canvas id="chart-${date}"></canvas></div>
+  `;
+  chartsGrid.appendChild(card);
+
+  const mainItems = [];
+  let otherCount = 0;
+  sorted.forEach(([label, count]) => {
+    if ((count / total * 100) >= 4) {
+      mainItems.push([label, count]);
+    } else {
+      otherCount += count;
+    }
+  });
+  if (otherCount > 0) mainItems.push(["Otros", otherCount]);
+
+  const labels = mainItems.map(([l]) => l);
+  const values = mainItems.map(([, v]) => v);
+  const colors = labels.map(l => l === "Otros" ? "#374151" : getColor(l));
+
+  setTimeout(() => {
+    new Chart(document.getElementById(`chart-${date}`), {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: colors, borderWidth: 0, hoverOffset: 8 }]
+      },
+      options: {
+        responsive: true,
+        cutout: '55%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a24',
+            titleColor: '#e8e6f0',
+            bodyColor: '#e8e6f0',
+            borderColor: '#2a2a3d',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              label: (ctx) => {
+                const pct = (ctx.raw / total * 100).toFixed(1);
+                return ` ${ctx.label}: ${ctx.raw} (${pct}%)`;
+              }
+            }
+          }
+        },
+        animation: { animateRotate: true, duration: 1000 }
+      }
+    });
+  }, idx * 150);
+});
+
+// Total chart
+const totalData = {};
+dates.forEach(date => {
+  Object.entries(DATA[date]).forEach(([label, count]) => {
+    totalData[label] = (totalData[label] || 0) + count;
+  });
+});
+
+const totalSorted = Object.entries(totalData).sort((a, b) => b[1] - a[1]);
+const totalLabels = totalSorted.map(([l]) => l);
+const totalValues = totalSorted.map(([, v]) => v);
+const totalColors = totalLabels.map(l => getColor(l));
+const grandTotal = totalValues.reduce((a, b) => a + b, 0);
+
+new Chart(document.getElementById('totalChart'), {
+  type: 'doughnut',
+  data: {
+    labels: totalLabels,
+    datasets: [{ data: totalValues, backgroundColor: totalColors, borderWidth: 0, hoverOffset: 10 }]
+  },
+  options: {
+    responsive: true,
+    cutout: '50%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a1a24',
+        titleColor: '#e8e6f0',
+        bodyColor: '#e8e6f0',
+        borderColor: '#2a2a3d',
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          label: (ctx) => {
+            const pct = (ctx.raw / grandTotal * 100).toFixed(1);
+            return ` ${ctx.label}: ${ctx.raw} (${pct}%)`;
+          }
+        }
+      }
+    },
+    animation: { animateRotate: true, duration: 1200 }
+  }
+});
+
+// Breakdown list
+const breakdown = document.getElementById('totalBreakdown');
+breakdown.innerHTML = `<h3>Total: ${grandTotal} Fallos</h3>`;
+totalSorted.forEach(([label, count]) => {
+  const pct = (count / grandTotal * 100).toFixed(1);
+  const item = document.createElement('div');
+  item.className = 'breakdown-item';
+  item.innerHTML = `
+    <div class="breakdown-dot" style="background:${getColor(label)}"></div>
+    <div class="breakdown-label">${label}</div>
+    <div class="breakdown-value">${count}</div>
+    <div class="breakdown-pct">${pct}%</div>
+  `;
+  breakdown.appendChild(item);
+});
+</script>
+</body>
+</html>
