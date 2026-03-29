@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import {
   Mail, Bot, Save, Plus, Edit, Clock, ExternalLink, CheckCircle2,
-  AlertCircle, Loader2, Trash2, X, Globe, Server,
+  AlertCircle, Loader2, Trash2, X, Globe, Server, XCircle
 } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -72,7 +72,8 @@ const CONDITION_LABELS: Record<string, string> = {
 
 export default function MailConfigPage() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const saving = saveStatus === "saving";
   const [config, setConfig] = useState<EmailConfig>({
     provider: "none",
     email_address: "",
@@ -153,7 +154,7 @@ export default function MailConfigPage() {
   }, [fetchConfig, fetchRules]);
 
   const saveConfig = async (partial?: Partial<EmailConfig>) => {
-    setSaving(true);
+    setSaveStatus("saving");
     try {
       const payload = { ...config, ...partial };
       const res = await fetch("/api/emails/config", {
@@ -164,14 +165,24 @@ export default function MailConfigPage() {
       if (res.ok) {
         const { config: saved } = await res.json();
         setConfig(saved);
-        toast.success("Configuración guardada");
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2500);
       } else {
         const { error } = await res.json();
         toast.error(error ?? "Error al guardar");
+        setSaveStatus("error");
+        setTimeout(() => setSaveStatus("idle"), 2500);
       }
-    } finally {
-      setSaving(false);
+    } catch {
+      toast.error("Error al guardar");
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 2500);
     }
+  };
+
+  const handleUpdate = (partial: Partial<EmailConfig>) => {
+    setConfig(c => ({ ...c, ...partial }));
+    saveConfig(partial);
   };
 
   const verifyDomain = async () => {
@@ -329,10 +340,11 @@ export default function MailConfigPage() {
           <h1 className="text-3xl font-bold tracking-tight">Configuración de Mails</h1>
           <p className="text-muted-foreground">Configurá las opciones de gestión de correo electrónico</p>
         </div>
-        <Button onClick={() => saveConfig()} disabled={saving}>
-          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          Guardar Cambios
-        </Button>
+        <div className="flex items-center gap-2 text-sm font-medium mr-4">
+          {saveStatus === "saving" && <><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /><span className="text-muted-foreground">Guardando...</span></>}
+          {saveStatus === "saved" && <><CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500" /><span className="text-green-600 dark:text-green-500">Guardado</span></>}
+          {saveStatus === "error" && <><XCircle className="h-4 w-4 text-red-600 dark:text-red-500" /><span className="text-red-600 dark:text-red-500">Error</span></>}
+        </div>
       </div>
 
       {/* Status bar */}
@@ -518,6 +530,7 @@ export default function MailConfigPage() {
                     <Input
                       value={config.sender_name ?? ""}
                       onChange={(e) => setConfig((c) => ({ ...c, sender_name: e.target.value }))}
+                      onBlur={() => saveConfig()}
                       placeholder="Ej: Soporte de TuEmpresa"
                     />
                   </div>
@@ -526,6 +539,7 @@ export default function MailConfigPage() {
                     <Input
                       value={config.reply_to_email ?? ""}
                       onChange={(e) => setConfig((c) => ({ ...c, reply_to_email: e.target.value }))}
+                      onBlur={() => saveConfig()}
                       placeholder="soporte@tuempresa.com"
                     />
                     <p className="text-xs text-muted-foreground">A donde llegan las respuestas de tus clientes.</p>
@@ -559,11 +573,13 @@ export default function MailConfigPage() {
                         type="color"
                         value={config.accent_color ?? "#fbbf24"}
                         onChange={(e) => setConfig((c) => ({ ...c, accent_color: e.target.value }))}
+                        onBlur={() => saveConfig()}
                         className="w-12 h-10 p-1 cursor-pointer"
                       />
                       <Input
                         value={config.accent_color ?? "#fbbf24"}
                         onChange={(e) => setConfig((c) => ({ ...c, accent_color: e.target.value }))}
+                        onBlur={() => saveConfig()}
                         className="flex-1 font-mono uppercase"
                       />
                     </div>
@@ -575,6 +591,7 @@ export default function MailConfigPage() {
                       className="w-full min-h-[100px] p-3 border rounded-md bg-background text-sm resize-y"
                       value={config.signature ?? ""}
                       onChange={(e) => setConfig((c) => ({ ...c, signature: e.target.value }))}
+                      onBlur={() => saveConfig()}
                     />
                   </div>
 
@@ -583,7 +600,7 @@ export default function MailConfigPage() {
                       <Label>Footer del Correo</Label>
                       <Switch
                         checked={config.show_footer ?? true}
-                        onCheckedChange={(v) => setConfig((c) => ({ ...c, show_footer: v }))}
+                        onCheckedChange={(v) => handleUpdate({ show_footer: v })}
                       />
                     </div>
                     {config.show_footer && (
@@ -591,6 +608,7 @@ export default function MailConfigPage() {
                         className="w-full min-h-[70px] p-3 border rounded-md bg-background text-xs resize-y text-muted-foreground"
                         value={config.footer_text ?? ""}
                         onChange={(e) => setConfig((c) => ({ ...c, footer_text: e.target.value }))}
+                        onBlur={() => saveConfig()}
                       />
                     )}
                   </div>
@@ -669,7 +687,7 @@ export default function MailConfigPage() {
                 </div>
                 <Switch
                   checked={config.auto_classify ?? false}
-                  onCheckedChange={(v) => setConfig((c) => ({ ...c, auto_classify: v }))}
+                  onCheckedChange={(v) => handleUpdate({ auto_classify: v })}
                 />
               </div>
 
@@ -679,7 +697,7 @@ export default function MailConfigPage() {
                     <Label>Modelo de IA</Label>
                     <Select
                       value={config.ai_model ?? "gpt-4o-mini"}
-                      onValueChange={(v) => setConfig((c) => ({ ...c, ai_model: v }))}
+                      onValueChange={(v) => handleUpdate({ ai_model: v })}
                     >
                       <SelectTrigger className="w-[220px]">
                         <SelectValue />
@@ -699,12 +717,10 @@ export default function MailConfigPage() {
                         <Badge key={cat} variant="outline" className="gap-1">
                           {cat}
                           <button
-                            onClick={() =>
-                              setConfig((c) => ({
-                                ...c,
-                                ai_categories: (c.ai_categories ?? []).filter((x) => x !== cat),
-                              }))
-                            }
+                            onClick={() => {
+                              const newCats = (config.ai_categories ?? []).filter((x) => x !== cat);
+                              handleUpdate({ ai_categories: newCats });
+                            }}
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -716,7 +732,10 @@ export default function MailConfigPage() {
                         className="h-6 text-xs"
                         onClick={() => {
                           const cat = prompt("Nueva categoría:");
-                          if (cat) setConfig((c) => ({ ...c, ai_categories: [...(c.ai_categories ?? []), cat] }));
+                          if (cat) {
+                            const newCats = [...(config.ai_categories ?? []), cat];
+                            handleUpdate({ ai_categories: newCats });
+                          }
                         }}
                       >
                         <Plus className="h-3 w-3 mr-1" /> Agregar
@@ -726,9 +745,7 @@ export default function MailConfigPage() {
                 </div>
               )}
 
-              <Button onClick={() => saveConfig()} disabled={saving}>
-                <Save className="mr-2 h-4 w-4" /> Guardar
-              </Button>
+              {/* Removed Guardar button as it auto-saves now */}
             </CardContent>
           </Card>
         </TabsContent>
