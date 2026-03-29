@@ -26,20 +26,18 @@ export async function POST(request: NextRequest) {
     const { data: allDomains, error: listError } = await resend.domains.list();
     if (listError) throw listError;
 
-    let domainData = allDomains?.data?.find((d) => d.name === domain);
+    let domainData: Record<string, unknown> | undefined = allDomains?.data?.find((d) => d.name === domain);
 
-    // If not found, create it
     if (!domainData) {
       const { data: created, error: createError } = await resend.domains.create({
         name: domain,
       });
       if (createError) throw createError;
-      domainData = created as typeof domainData;
+      domainData = created as Record<string, unknown> | undefined;
     } else {
-      // Re-verify
-      await resend.domains.verify(domainData.id);
-      const { data: refreshed } = await resend.domains.get(domainData.id);
-      domainData = refreshed as typeof domainData;
+      await resend.domains.verify(domainData.id as string);
+      const { data: refreshed } = await resend.domains.get(domainData.id as string);
+      domainData = refreshed as Record<string, unknown> | undefined;
     }
 
     const serviceClient = await createServiceClient();
@@ -51,14 +49,14 @@ export async function POST(request: NextRequest) {
         email_address: `noreply@${domain}`,
         credentials: {},
         resend_domain: domain,
-        resend_domain_id: (domainData as { id?: string })?.id ?? null,
-        resend_domain_verified: (domainData as { status?: string })?.status === "verified",
+        resend_domain_id: (domainData?.id as string) ?? null,
+        resend_domain_verified: domainData?.status === "verified",
       }, { onConflict: "org_id" });
 
     return NextResponse.json({
       domain: domainData,
-      verified: (domainData as { status?: string })?.status === "verified",
-      records: (domainData as { records?: unknown[] })?.records ?? [
+      verified: domainData?.status === "verified",
+      records: (domainData?.records as unknown[]) ?? [
         { type: "MX", name: "@", value: "inbound.resend.com", priority: 10, status: "pending" },
         { type: "TXT", name: "@", value: "v=spf1 include:resend.com ~all", status: "pending" },
       ],
