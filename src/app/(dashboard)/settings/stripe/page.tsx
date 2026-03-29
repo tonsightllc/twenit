@@ -88,6 +88,10 @@ export default function StripeSettingsPage() {
   const [customerCount, setCustomerCount] = useState(0);
   const [subCount, setSubCount] = useState(0);
   const [connectMethod, setConnectMethod] = useState<"oauth" | "apikey" | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncIncomplete, setSyncIncomplete] = useState(false);
+  const [liveCustomers, setLiveCustomers] = useState<number | null>(null);
+  const [liveSubs, setLiveSubs] = useState<number | null>(null);
 
   // API Key state
   const [apiKey, setApiKey] = useState("");
@@ -143,6 +147,72 @@ export default function StripeSettingsPage() {
   }, [supabase, orgId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncIncomplete(false);
+    setLiveCustomers(null);
+    setLiveSubs(null);
+    let completed = false;
+
+    try {
+      const res = await fetch("/api/stripe/sync", { method: "POST" });
+      if (!res.ok || !res.body) {
+        toast.error("Error al iniciar sincronización");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line) as {
+              phase: string;
+              customers: number;
+              subscriptions: number;
+              done: boolean;
+              error?: string;
+            };
+            setLiveCustomers(data.customers);
+            setLiveSubs(data.subscriptions);
+
+            if (data.done) {
+              completed = true;
+              toast.success(`Sincronización completa — ${data.customers} clientes, ${data.subscriptions} suscripciones`);
+            } else if (data.error) {
+              toast.error(`Error durante sync: ${data.error}`);
+            }
+          } catch {
+            // malformed chunk, skip
+          }
+        }
+      }
+
+      if (!completed) {
+        setSyncIncomplete(true);
+        toast.warning("La sincronización se interrumpió antes de completarse");
+      }
+
+      await loadData();
+    } catch {
+      toast.error("Error de conexión durante la sincronización");
+    } finally {
+      setSyncing(false);
+      setLiveCustomers(null);
+      setLiveSubs(null);
+    }
+  }
 
   async function handleApiKeyConnect() {
     if (!apiKey.trim()) return;
@@ -279,10 +349,15 @@ export default function StripeSettingsPage() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Clientes Sincronizados</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{customerCount}</div>
-                <Button variant="link" className="px-0 h-auto" asChild>
-                  <Link href="/ventas">Ver clientes <ArrowRight className="ml-1 h-3 w-3" /></Link>
-                </Button>
+                <div className="text-3xl font-bold tabular-nums transition-all">
+                  {liveCustomers !== null ? liveCustomers : customerCount}
+                  {syncing && liveCustomers !== null && <span className="text-base text-muted-foreground ml-1 animate-pulse">...</span>}
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <Button variant="link" className="px-0 h-auto" asChild>
+                    <Link href="/ventas">Ver clientes <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
             <Card>
@@ -290,9 +365,44 @@ export default function StripeSettingsPage() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Suscripciones Activas</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{subCount}</div>
-                <Button variant="link" className="px-0 h-auto" asChild>
-                  <Link href="/ventas">Ver suscripciones <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                <div className="text-3xl font-bold tabular-nums transition-all">
+                  {liveSubs !== null ? liveSubs : subCount}
+                  {syncing && liveSubs !== null && <span className="text-base text-muted-foreground ml-1 animate-pulse">...</span>}
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <Button variant="link" className="px-0 h-auto" asChild>
+                    <Link href="/ventas">Ver suscripciones <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-dashed">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Sincronización Manual</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {syncIncomplete && (
+                  <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-lg mb-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <p>La última sincronización no terminó. Los datos pueden estar incompletos. Intentá de nuevo.</p>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mb-3">
+                  {syncing
+                    ? `Sincronizando... ${liveCustomers ?? 0} clientes, ${liveSubs ?? 0} suscripciones`
+                    : "Forzá una re-sincronización completa desde Stripe."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={syncing}
+                >
+                  {syncing ? (
+                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Sincronizando...</>
+                  ) : (
+                    syncIncomplete ? "Reintentar sincronización" : "Re-sincronizar ahora"
+                  )}
                 </Button>
               </CardContent>
             </Card>
