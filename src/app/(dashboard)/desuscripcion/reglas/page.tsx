@@ -123,9 +123,9 @@ export default function ReglasPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reglas de Desuscripción</h1>
-          <p className="text-muted-foreground">
-            Configura cómo manejar cancelaciones, refunds y disputas
+          <h1 className="text-3xl font-bold tracking-tight">Política de Retención y Disputas</h1>
+          <p className="text-muted-foreground mt-1">
+            Configurá cómo debe reaccionar el sistema ante pedidos de baja y alertas de Stripe.
           </p>
         </div>
         <Button onClick={handleSave} disabled={saving}>
@@ -136,6 +136,16 @@ export default function ReglasPage() {
           )}
           Guardar Cambios
         </Button>
+      </div>
+
+      <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300 flex items-start gap-3">
+        <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+        <div>
+          <p className="font-semibold mb-1">Estado de las reglas automáticas</p>
+          <p>
+            Para desactivar cualquier regla y evitar que Twenit tome decisiones por vos en Stripe, simplemente seleccioná la opción <strong>&quot;Revisar manualmente&quot;</strong>. Por defecto, todas las alertas de fraude y disputas están en este modo seguro (inactivo).
+          </p>
+        </div>
       </div>
 
       <Tabs defaultValue="cancelacion">
@@ -149,17 +159,17 @@ export default function ReglasPage() {
         <TabsContent value="cancelacion" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Comportamiento de Cancelación</CardTitle>
+              <CardTitle>Flujo del Portal de Cancelación</CardTitle>
               <CardDescription>
-                Define cómo se procesan las cancelaciones de suscripción
+                Define qué pasa cuando un cliente intenta darse de baja mediante el portal de retención de Twenit.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Cancelación Inmediata</Label>
+                  <Label>Cancelación Directa</Label>
                   <p className="text-sm text-muted-foreground">
-                    Cancelar la suscripción inmediatamente sin ofrecer alternativas
+                    Si el cliente pide la baja, cancelar su suscripción en Stripe sin fricción (recomendado). Si lo desactivás, requerirá revisión tuya.
                   </p>
                 </div>
                 <Switch
