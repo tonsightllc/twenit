@@ -26,18 +26,19 @@ export async function POST(request: NextRequest) {
     const { data: allDomains, error: listError } = await resend.domains.list();
     if (listError) throw listError;
 
-    let domainData: Record<string, unknown> | undefined = allDomains?.data?.find((d) => d.name === domain);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let domainData: any = allDomains?.data?.find((d) => d.name === domain);
 
     if (!domainData) {
       const { data: created, error: createError } = await resend.domains.create({
         name: domain,
       });
       if (createError) throw createError;
-      domainData = created as Record<string, unknown> | undefined;
+      domainData = created;
     } else {
-      await resend.domains.verify(domainData.id as string);
-      const { data: refreshed } = await resend.domains.get(domainData.id as string);
-      domainData = refreshed as Record<string, unknown> | undefined;
+      await resend.domains.verify(domainData.id);
+      const { data: refreshed } = await resend.domains.get(domainData.id);
+      domainData = refreshed;
     }
 
     const serviceClient = await createServiceClient();
@@ -49,14 +50,14 @@ export async function POST(request: NextRequest) {
         email_address: `noreply@${domain}`,
         credentials: {},
         resend_domain: domain,
-        resend_domain_id: (domainData?.id as string) ?? null,
+        resend_domain_id: domainData?.id ?? null,
         resend_domain_verified: domainData?.status === "verified",
       }, { onConflict: "org_id" });
 
     return NextResponse.json({
       domain: domainData,
       verified: domainData?.status === "verified",
-      records: (domainData?.records as unknown[]) ?? [
+      records: domainData?.records ?? [
         { type: "MX", name: "@", value: "inbound.resend.com", priority: 10, status: "pending" },
         { type: "TXT", name: "@", value: "v=spf1 include:resend.com ~all", status: "pending" },
       ],
