@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Save, AlertTriangle, DollarSign, ShieldAlert } from "lucide-react";
+import { Loader2, AlertTriangle, DollarSign, ShieldAlert, ExternalLink, CheckCircle2, XCircle } from "lucide-react";
+import Link from "next/link";
 
 interface UnsubscriptionRules {
   id?: string;
@@ -44,7 +45,7 @@ interface UnsubscriptionRules {
 export default function ReglasPage() {
   const { orgId } = useOrg();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [rules, setRules] = useState<UnsubscriptionRules>({
     immediate_cancel: true,
     offer_benefit_first: false,
@@ -89,26 +90,30 @@ export default function ReglasPage() {
     loadRules();
   }, [orgId, supabase]);
 
-  const handleSave = async () => {
+  const autoSaveRules = async (rulesToSave: UnsubscriptionRules) => {
     if (!orgId) return;
-    setSaving(true);
+    setSaveStatus("saving");
     try {
       const { error } = await supabase
         .from("unsubscription_rules")
-        .upsert({
-          ...rules,
-          org_id: orgId,
-        });
+        .upsert({ ...rulesToSave, org_id: orgId });
 
       if (error) throw error;
-
-      toast.success("Reglas guardadas correctamente");
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2500);
     } catch (error) {
       console.error(error);
-      toast.error("Error al guardar las reglas");
-    } finally {
-      setSaving(false);
+      setSaveStatus("error");
+      toast.error("Error al guardar preferencia");
     }
+  };
+
+  const handleUpdate = (updater: (prev: UnsubscriptionRules) => UnsubscriptionRules) => {
+    setRules((prev) => {
+      const next = updater(prev);
+      autoSaveRules(next);
+      return next;
+    });
   };
 
   if (loading) {
@@ -128,14 +133,11 @@ export default function ReglasPage() {
             Configurá cómo debe reaccionar el sistema ante pedidos de baja y alertas de Stripe.
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          Guardar Cambios
-        </Button>
+        <div className="flex items-center gap-2 text-sm font-medium mr-4">
+          {saveStatus === "saving" && <><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /><span className="text-muted-foreground">Guardando...</span></>}
+          {saveStatus === "saved" && <><CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500" /><span className="text-green-600 dark:text-green-500">Guardado</span></>}
+          {saveStatus === "error" && <><XCircle className="h-4 w-4 text-red-600 dark:text-red-500" /><span className="text-red-600 dark:text-red-500">Error</span></>}
+        </div>
       </div>
 
       <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300 flex items-start gap-3">
@@ -159,9 +161,17 @@ export default function ReglasPage() {
         <TabsContent value="cancelacion" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Flujo del Portal de Cancelación</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Flujo del
+                <Link 
+                  href="/desuscripcion" 
+                  className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 px-2.5 py-0.5 rounded-md text-sm transition-colors"
+                >
+                  Portal de Cancelación <ExternalLink className="h-3 w-3" />
+                </Link>
+              </CardTitle>
               <CardDescription>
-                Define qué pasa cuando un cliente intenta darse de baja mediante el portal de retención de Twenit.
+                Define qué pasa cuando un cliente intenta darse de baja mediante el portal de retención de Twenit. Estas reglas se aplican exclusivamente allí.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -175,7 +185,7 @@ export default function ReglasPage() {
                 <Switch
                   checked={rules.immediate_cancel}
                   onCheckedChange={(checked) =>
-                    setRules({ ...rules, immediate_cancel: checked })
+                    handleUpdate((prev) => ({ ...prev, immediate_cancel: checked }))
                   }
                 />
               </div>
@@ -190,7 +200,7 @@ export default function ReglasPage() {
                 <Switch
                   checked={rules.offer_benefit_first}
                   onCheckedChange={(checked) =>
-                    setRules({ ...rules, offer_benefit_first: checked })
+                    handleUpdate((prev) => ({ ...prev, offer_benefit_first: checked }))
                   }
                 />
               </div>
@@ -202,7 +212,7 @@ export default function ReglasPage() {
                     <Select
                       value={rules.benefit_type || ""}
                       onValueChange={(value) =>
-                        setRules({ ...rules, benefit_type: value })
+                        handleUpdate((prev) => ({ ...prev, benefit_type: value }))
                       }
                     >
                       <SelectTrigger>
@@ -229,12 +239,10 @@ export default function ReglasPage() {
                         onChange={(e) =>
                           setRules({
                             ...rules,
-                            benefit_config: {
-                              ...rules.benefit_config,
-                              discount_percent: parseInt(e.target.value) || 0,
-                            },
+                            benefit_config: { ...rules.benefit_config, discount_percent: parseInt(e.target.value) || 0 },
                           })
                         }
+                        onBlur={() => autoSaveRules(rules)}
                       />
                     </div>
                   )}
@@ -252,7 +260,7 @@ export default function ReglasPage() {
                 <CardTitle>Reglas de Refund</CardTitle>
               </div>
               <CardDescription>
-                Configura cuándo procesar refunds automáticamente
+                Configura cuándo procesar devoluciones automáticamente. <strong className="text-foreground">Aplica cuando un cliente solicita un reembolso a través del Bot de Soporte o el Portal de Cancelación.</strong>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -266,12 +274,10 @@ export default function ReglasPage() {
                   onChange={(e) =>
                     setRules({
                       ...rules,
-                      refund_rules: {
-                        ...rules.refund_rules,
-                        auto_refund_below: e.target.value ? parseInt(e.target.value) : null,
-                      },
+                      refund_rules: { ...rules.refund_rules, auto_refund_below: e.target.value ? parseInt(e.target.value) : null },
                     })
                   }
+                  onBlur={() => autoSaveRules(rules)}
                 />
                 <p className="text-sm text-muted-foreground">
                   Los refunds por debajo de este monto se aprobarán automáticamente
@@ -288,12 +294,10 @@ export default function ReglasPage() {
                   onChange={(e) =>
                     setRules({
                       ...rules,
-                      refund_rules: {
-                        ...rules.refund_rules,
-                        require_approval_above: e.target.value ? parseInt(e.target.value) : null,
-                      },
+                      refund_rules: { ...rules.refund_rules, require_approval_above: e.target.value ? parseInt(e.target.value) : null },
                     })
                   }
+                  onBlur={() => autoSaveRules(rules)}
                 />
               </div>
 
@@ -306,12 +310,10 @@ export default function ReglasPage() {
                   onChange={(e) =>
                     setRules({
                       ...rules,
-                      refund_rules: {
-                        ...rules.refund_rules,
-                        max_refund_days: parseInt(e.target.value) || 30,
-                      },
+                      refund_rules: { ...rules.refund_rules, max_refund_days: parseInt(e.target.value) || 30 },
                     })
                   }
+                  onBlur={() => autoSaveRules(rules)}
                 />
               </div>
             </CardContent>
@@ -326,19 +328,16 @@ export default function ReglasPage() {
                 <CardTitle>Early Fraud Warning (EFW)</CardTitle>
               </div>
               <CardDescription>
-                Configura cómo responder a alertas de fraude tempranas de Stripe
+                Siempre que Stripe nos informe un posible fraude mediante webhook, aplicaremos esta regla automáticamente para proteger tu cuenta y evitar disputas (chargebacks).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>Acción ante EFW</Label>
+                <Label>Acción automática ante EFW</Label>
                 <Select
                   value={rules.efw_rules.action}
                   onValueChange={(value) =>
-                    setRules({
-                      ...rules,
-                      efw_rules: { ...rules.efw_rules, action: value },
-                    })
+                    handleUpdate((prev) => ({ ...prev, efw_rules: { ...prev.efw_rules, action: value } }))
                   }
                 >
                   <SelectTrigger>
@@ -362,10 +361,7 @@ export default function ReglasPage() {
                 <Switch
                   checked={rules.efw_rules.mark_fraudulent}
                   onCheckedChange={(checked) =>
-                    setRules({
-                      ...rules,
-                      efw_rules: { ...rules.efw_rules, mark_fraudulent: checked },
-                    })
+                    handleUpdate((prev) => ({ ...prev, efw_rules: { ...prev.efw_rules, mark_fraudulent: checked } }))
                   }
                 />
               </div>
@@ -390,10 +386,7 @@ export default function ReglasPage() {
                 <Select
                   value={rules.dispute_rules.action}
                   onValueChange={(value) =>
-                    setRules({
-                      ...rules,
-                      dispute_rules: { ...rules.dispute_rules, action: value },
-                    })
+                    handleUpdate((prev) => ({ ...prev, dispute_rules: { ...prev.dispute_rules, action: value } }))
                   }
                 >
                   <SelectTrigger>
@@ -418,12 +411,10 @@ export default function ReglasPage() {
                     onChange={(e) =>
                       setRules({
                         ...rules,
-                        dispute_rules: {
-                          ...rules.dispute_rules,
-                          min_amount_to_dispute: parseInt(e.target.value) || 0,
-                        },
+                        dispute_rules: { ...rules.dispute_rules, min_amount_to_dispute: parseInt(e.target.value) || 0 },
                       })
                     }
+                    onBlur={() => autoSaveRules(rules)}
                   />
                   <p className="text-sm text-muted-foreground">
                     Solo disputar cargos por encima de este monto
