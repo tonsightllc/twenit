@@ -210,6 +210,9 @@ export default function MailConfigPage() {
       } else {
         toast.error(data.error ?? "Error verificando dominio");
       }
+    } catch (err) {
+      console.error("Error verificando dominio:", err);
+      toast.error("Error al verificar el dominio. Revisá la consola para más detalles.");
     } finally {
       setVerifying(false);
     }
