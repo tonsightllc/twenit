@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         event = stripe.webhooks.constructEvent(body, signature, secret);
         orgId = conn.org_id;
         console.log(`[Webhook/ApiKey] Processing ${event.type} for org ${orgId}`);
-        await processEvent(supabase, event, orgId);
+        await processEvent(supabase, event, orgId as string);
         return NextResponse.json({ received: true });
       } catch {
         // Not this org's secret, try next

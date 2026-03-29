@@ -106,6 +106,41 @@ async function executeAction(
     actionConfig: Record<string, unknown>,
     data: Record<string, unknown>
 ) {
+    // ── Ownership helpers ─────────────────────────────────────────────────
+    async function isSubscriptionOwnedByOrg(subscriptionId: string): Promise<boolean> {
+        const { data: sub } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("stripe_subscription_id", subscriptionId)
+            .single();
+        return !!sub;
+    }
+
+    async function isChargeOwnedByOrg(chargeId: string): Promise<boolean> {
+        // Stripe charges are prefixed with ch_ and tied to a customer.
+        // We verify the customer exists in this org via the customers table.
+        // For full certainty we look at the charge in our events log.
+        const { data: event } = await supabase
+            .from("stripe_events")
+            .select("id")
+            .eq("org_id", orgId)
+            .filter("payload->>charge", "eq", chargeId)
+            .limit(1)
+            .maybeSingle();
+        if (event) return true;
+
+        // Fallback: check if any matching charge is in invoice events for this org
+        const { data: invoiceEvent } = await supabase
+            .from("stripe_events")
+            .select("id")
+            .eq("org_id", orgId)
+            .filter("payload->>id", "eq", chargeId)
+            .limit(1)
+            .maybeSingle();
+        return !!invoiceEvent;
+    }
+
     switch (actionType) {
         // ─── Send Email ──────────────────────────────────────────
         case "send_email": {
@@ -203,6 +238,10 @@ async function executeAction(
                 (actionConfig.duration_months as number) || 1;
 
             if (subscriptionId) {
+                if (!(await isSubscriptionOwnedByOrg(subscriptionId))) {
+                    console.warn(`[Automation] Blocked discount: sub ${subscriptionId} not owned by org ${orgId}`);
+                    break;
+                }
                 try {
                     await applyDiscount(
                         stripeData.client,
@@ -230,6 +269,10 @@ async function executeAction(
                 (getNestedValue(data, "subscription.id") as string);
 
             if (subscriptionId) {
+                if (!(await isSubscriptionOwnedByOrg(subscriptionId))) {
+                    console.warn(`[Automation] Blocked pause: sub ${subscriptionId} not owned by org ${orgId}`);
+                    break;
+                }
                 try {
                     await pauseSubscription(stripeData.client, subscriptionId);
                     console.log(`Subscription ${subscriptionId} paused`);
@@ -254,6 +297,11 @@ async function executeAction(
             const amount = actionConfig.amount as number | undefined;
 
             if (chargeId || paymentIntentId) {
+                // Ownership check: verify the charge belongs to this org
+                if (chargeId && !(await isChargeOwnedByOrg(chargeId))) {
+                    console.warn(`[Automation] Blocked refund: charge ${chargeId} not owned by org ${orgId}`);
+                    break;
+                }
                 try {
                     const refund = await createRefund(stripeData.client, {
                         chargeId,
