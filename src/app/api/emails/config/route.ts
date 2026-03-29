@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserOrg } from "@/lib/supabase/get-user-org";
 import { createServiceClient } from "@/lib/supabase/server";
+import { createEmailRoute } from "@/lib/cloudflare-email";
 
 const INBOUND_DOMAIN = "mail.twenit.com";
 
@@ -129,6 +130,24 @@ export async function POST(request: NextRequest) {
     ai_model: ai_model ?? "gpt-4o-mini",
     ai_categories: ai_categories ?? ["Soporte", "Facturación", "Ventas", "Cancelación", "Otro"],
   };
+
+  // If switching to forwarding, register the address in Cloudflare Email Routing
+  if (connection_method === "forwarding" && inboundAddress) {
+    const existingMethod = existing
+      ? (await serviceClient.from("email_configs").select("connection_method").eq("org_id", orgId).single()).data?.connection_method
+      : null;
+
+    if (existingMethod !== "forwarding") {
+      try {
+        const cfResult = await createEmailRoute(inboundAddress);
+        if (!cfResult.success) {
+          console.error("Cloudflare email route creation failed:", cfResult.error);
+        }
+      } catch (err) {
+        console.error("Error creating Cloudflare email route:", err);
+      }
+    }
+  }
 
   let result;
   if (existing) {
