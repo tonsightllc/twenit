@@ -39,6 +39,7 @@ interface StripeConnectionData {
   livemode: boolean;
   connected_at: string;
   connection_type: string | null;
+  has_webhook_secret: boolean;
 }
 
 const FEATURES = [
@@ -93,6 +94,11 @@ export default function StripeSettingsPage() {
   const [liveCustomers, setLiveCustomers] = useState<number | null>(null);
   const [liveSubs, setLiveSubs] = useState<number | null>(null);
 
+  // Webhook registration state
+  const [registeringWebhook, setRegisteringWebhook] = useState(false);
+  const [showManualSecret, setShowManualSecret] = useState(false);
+  const [manualSecret, setManualSecret] = useState("");
+
   // API Key state
   const [apiKey, setApiKey] = useState("");
   const [connectingApiKey, setConnectingApiKey] = useState(false);
@@ -126,7 +132,7 @@ export default function StripeSettingsPage() {
       await Promise.all([
         supabase
           .from("stripe_connections")
-          .select("id, stripe_account_id, livemode, connected_at, connection_type")
+          .select("id, stripe_account_id, livemode, connected_at, connection_type, webhook_secret")
           .eq("org_id", orgId)
           .single(),
         supabase
@@ -140,7 +146,10 @@ export default function StripeSettingsPage() {
           .eq("status", "active"),
       ]);
 
-    setConnection(stripeConnection);
+    setConnection(stripeConnection ? {
+      ...stripeConnection,
+      has_webhook_secret: !!stripeConnection.webhook_secret,
+    } : null);
     setCustomerCount(customers || 0);
     setSubCount(subs || 0);
     setLoading(false);
@@ -151,8 +160,9 @@ export default function StripeSettingsPage() {
   async function handleSync() {
     setSyncing(true);
     setSyncIncomplete(false);
-    setLiveCustomers(null);
-    setLiveSubs(null);
+    // Resume UX: start counters from what's already in DB, not 0
+    setLiveCustomers(customerCount);
+    setLiveSubs(subCount);
     let completed = false;
 
     try {
@@ -211,6 +221,34 @@ export default function StripeSettingsPage() {
       setSyncing(false);
       setLiveCustomers(null);
       setLiveSubs(null);
+    }
+  }
+
+  async function handleRegisterWebhook(manualSecretValue?: string) {
+    setRegisteringWebhook(true);
+    try {
+      const body = manualSecretValue ? { manualSecret: manualSecretValue } : {};
+      const res = await fetch("/api/stripe/register-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.method === "manual" ? "Webhook secret guardado" : "Webhook registrado automáticamente ✓");
+        setShowManualSecret(false);
+        setManualSecret("");
+        await loadData();
+      } else if (data.needsManual) {
+        toast.warning("No se pudo registrar automáticamente. Pegá el secret manualmente.");
+        setShowManualSecret(true);
+      } else {
+        toast.error(data.error || "Error al registrar webhook");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setRegisteringWebhook(false);
     }
   }
 
@@ -418,16 +456,65 @@ export default function StripeSettingsPage() {
                   : "Conectado vía OAuth — los eventos se gestionan automáticamente usando Stripe Connect."}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 p-4 rounded-lg">
-                <ShieldCheck className="h-5 w-5 shrink-0" />
-                <p>
-                  Nuestra plataforma está recibiendo todos tus eventos de suscripciones, pagos, Early Fraud Warnings y disputas en tiempo real.
-                  {connection.connection_type === "apikey" && (
-                    <> Si el webhook no fue registrado automáticamente, agregá <code className="bg-black/10 px-1 rounded text-xs">{typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/stripe</code> manualmente en tu <a href="https://dashboard.stripe.com/test/webhooks" target="_blank" rel="noopener noreferrer" className="underline inline-flex items-center gap-0.5">dashboard de Stripe <ExternalLink className="h-3 w-3" /></a>.</>
+            <CardContent className="space-y-3">
+              {connection.connection_type === "apikey" && !connection.has_webhook_secret ? (
+                // ── Webhook secret missing ────────────────────────────────
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 p-4 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Webhook no configurado</p>
+                      <p className="mt-1 text-amber-600 dark:text-amber-500">
+                        No estás recibiendo eventos de Stripe en tiempo real. Configurá el webhook para activar automatizaciones, EFW y disputas.
+                      </p>
+                    </div>
+                  </div>
+                  {!showManualSecret ? (
+                    <Button
+                      size="sm"
+                      onClick={() => handleRegisterWebhook()}
+                      disabled={registeringWebhook}
+                    >
+                      {registeringWebhook
+                        ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Registrando...</>
+                        : "Registrar webhook automáticamente"}
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Pegá el <strong>Signing Secret</strong> de tu webhook ({`Stripe → Developers → Webhooks → tu endpoint → Signing secret`}):
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          type="password"
+                          placeholder="whsec_..."
+                          value={manualSecret}
+                          onChange={(e) => setManualSecret(e.target.value)}
+                          className="font-mono text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleRegisterWebhook(manualSecret)}
+                          disabled={registeringWebhook || !manualSecret.startsWith("whsec_")}
+                        >
+                          {registeringWebhook ? <Loader2 className="h-3 w-3 animate-spin" /> : "Guardar"}
+                        </Button>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRegisterWebhook()}>
+                        ← Intentar automáticamente de nuevo
+                      </Button>
+                    </div>
                   )}
-                </p>
-              </div>
+                </div>
+              ) : (
+                // ── Webhook active ────────────────────────────────────────
+                <div className="flex items-center gap-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 p-4 rounded-lg">
+                  <ShieldCheck className="h-5 w-5 shrink-0" />
+                  <p>
+                    Nuestra plataforma está recibiendo todos tus eventos de suscripciones, pagos, Early Fraud Warnings y disputas en tiempo real.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
