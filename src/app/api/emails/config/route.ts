@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserOrg } from "@/lib/supabase/get-user-org";
 import { createServiceClient } from "@/lib/supabase/server";
 
-// GET /api/emails/config — fetch org email config
+const INBOUND_DOMAIN = "mail.twenit.com";
+
+function generateInboundAddress(slug: string): string {
+  return `${slug}@${INBOUND_DOMAIN}`;
+}
+
 export async function GET() {
   const { user, orgId } = await getUserOrg();
   if (!user || !orgId) {
@@ -20,10 +25,41 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // If no inbound_address yet, generate one from org slug
+  if (data && !data.inbound_address) {
+    const { data: org } = await serviceClient
+      .from("organizations")
+      .select("slug")
+      .eq("id", orgId)
+      .single();
+
+    if (org?.slug) {
+      const inbound = generateInboundAddress(org.slug);
+      await serviceClient
+        .from("email_configs")
+        .update({ inbound_address: inbound })
+        .eq("org_id", orgId);
+      data.inbound_address = inbound;
+    }
+  }
+
+  // If no config exists yet, return a generated inbound_address for the UI
+  if (!data) {
+    const { data: org } = await serviceClient
+      .from("organizations")
+      .select("slug")
+      .eq("id", orgId)
+      .single();
+
+    return NextResponse.json({
+      config: null,
+      generatedInboundAddress: org?.slug ? generateInboundAddress(org.slug) : null,
+    });
+  }
+
   return NextResponse.json({ config: data });
 }
 
-// POST /api/emails/config — save org email config
 export async function POST(request: NextRequest) {
   const { user, orgId } = await getUserOrg();
   if (!user || !orgId) {
@@ -35,6 +71,7 @@ export async function POST(request: NextRequest) {
     provider,
     email_address,
     credentials,
+    connection_method,
     resend_domain,
     sender_name,
     reply_to_email,
@@ -52,18 +89,32 @@ export async function POST(request: NextRequest) {
 
   const serviceClient = await createServiceClient();
 
-  // Check if config exists for this org
   const { data: existing } = await serviceClient
     .from("email_configs")
-    .select("id")
+    .select("id, inbound_address")
     .eq("org_id", orgId)
     .maybeSingle();
 
-  const configData = {
+  // Generate inbound_address if not set
+  let inboundAddress = existing?.inbound_address ?? null;
+  if (!inboundAddress) {
+    const { data: org } = await serviceClient
+      .from("organizations")
+      .select("slug")
+      .eq("id", orgId)
+      .single();
+    if (org?.slug) {
+      inboundAddress = generateInboundAddress(org.slug);
+    }
+  }
+
+  const configData: Record<string, unknown> = {
     org_id: orgId,
     provider: provider ?? "none",
     email_address: email_address ?? "",
     credentials: credentials ?? {},
+    connection_method: connection_method ?? "none",
+    inbound_address: inboundAddress,
     resend_domain: resend_domain ?? null,
     sender_name: sender_name ?? null,
     reply_to_email: reply_to_email ?? null,

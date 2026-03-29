@@ -62,11 +62,14 @@ export async function POST(request: NextRequest) {
         { type: "TXT", name: "@", value: "v=spf1 include:resend.com ~all", status: "pending" },
       ],
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Domain verification error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Verification failed" },
-      { status: 500 }
-    );
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "Verification failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

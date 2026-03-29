@@ -18,16 +18,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Mail, Bot, Save, Plus, Edit, Clock, ExternalLink, CheckCircle2,
-  AlertCircle, Loader2, Trash2, X, Globe, Server, XCircle
+  Mail, Bot, Plus, Edit, ExternalLink, CheckCircle2,
+  AlertCircle, Loader2, Trash2, X, XCircle, Copy,
+  ArrowRight, Send, Inbox, Shield, Link2,
 } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface EmailConfig {
   id?: string;
   provider: string;
   email_address: string;
+  connection_method?: string;
+  inbound_address?: string;
   resend_domain?: string;
   resend_domain_verified?: boolean;
   credentials?: Record<string, string>;
@@ -71,12 +75,14 @@ const CONDITION_LABELS: Record<string, string> = {
 };
 
 export default function MailConfigPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const saving = saveStatus === "saving";
   const [config, setConfig] = useState<EmailConfig>({
     provider: "none",
     email_address: "",
+    connection_method: "none",
     sender_name: "Soporte",
     reply_to_email: "",
     signature: "Saludos,\n\nEl equipo de Soporte",
@@ -89,12 +95,8 @@ export default function MailConfigPage() {
     ai_categories: ["Soporte", "Facturación", "Ventas", "Cancelación", "Otro"],
   });
 
-  // Connection tab state
-  const [domainInput, setDomainInput] = useState("");
-  const [verifying, setVerifying] = useState(false);
-  const [dnsRecords, setDnsRecords] = useState<{
-    type: string; name: string; value: string; status: string; priority?: number;
-  }[]>([]);
+  const [generatedInboundAddress, setGeneratedInboundAddress] = useState<string | null>(null);
+  const inboundAddress = config.inbound_address ?? generatedInboundAddress;
 
   // SMTP state
   const [smtpHost, setSmtpHost] = useState("");
@@ -115,7 +117,6 @@ export default function MailConfigPage() {
     actionBody: "",
   });
 
-  // Appearance
   const [logo, setLogo] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
@@ -123,16 +124,18 @@ export default function MailConfigPage() {
     try {
       const res = await fetch("/api/emails/config");
       if (res.ok) {
-        const { config: loaded } = await res.json();
-        if (loaded) {
-          setConfig(loaded);
-          if (loaded.resend_domain) setDomainInput(loaded.resend_domain);
-          if (loaded.credentials?.smtp_host) {
-            setSmtpHost(loaded.credentials.smtp_host);
-            setSmtpPort(loaded.credentials.smtp_port ?? "587");
-            setSmtpUser(loaded.credentials.smtp_user ?? "");
-            setSmtpFrom(loaded.credentials.smtp_from ?? "");
+        const data = await res.json();
+        if (data.config) {
+          setConfig(data.config);
+          if (data.config.credentials?.smtp_host) {
+            setSmtpHost(data.config.credentials.smtp_host);
+            setSmtpPort(data.config.credentials.smtp_port ?? "587");
+            setSmtpUser(data.config.credentials.smtp_user ?? "");
+            setSmtpFrom(data.config.credentials.smtp_from ?? "");
           }
+        }
+        if (data.generatedInboundAddress) {
+          setGeneratedInboundAddress(data.generatedInboundAddress);
         }
       }
     } finally {
@@ -185,52 +188,35 @@ export default function MailConfigPage() {
     saveConfig(partial);
   };
 
-  const verifyDomain = async () => {
-    if (!domainInput) return;
-    setVerifying(true);
-    try {
-      const res = await fetch("/api/emails/verify-domain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: domainInput }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDnsRecords(
-          (data.records ?? []).map((r: { type: string; name: string; value: string; status: string; priority?: number }) => ({
-            type: r.type,
-            name: r.name,
-            value: r.value,
-            status: r.status ?? "pending",
-            priority: r.priority,
-          }))
-        );
-        setConfig((prev) => ({ ...prev, resend_domain: domainInput, resend_domain_verified: data.verified }));
-        toast.success(data.verified ? "✅ Dominio verificado" : "DNS records generados — aguardando propagación");
-      } else {
-        toast.error(data.error ?? "Error verificando dominio");
-      }
-    } catch (err) {
-      console.error("Error verificando dominio:", err);
-      toast.error("Error al verificar el dominio. Revisá la consola para más detalles.");
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   const saveSMTP = async () => {
     await saveConfig({
       provider: "smtp",
+      connection_method: "smtp_only",
       email_address: smtpFrom,
       credentials: {
+        ...config.credentials,
         smtp_host: smtpHost,
         smtp_port: smtpPort,
         smtp_user: smtpUser,
+        smtp_pass: smtpPass,
         smtp_from: smtpFrom,
       },
     });
   };
 
+  const activateForwarding = async () => {
+    await saveConfig({
+      provider: "forwarding",
+      connection_method: "forwarding",
+    });
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copiado al portapapeles");
+  };
+
+  // Automation CRUD
   const saveRule = async () => {
     const payload = {
       name: newRule.name,
@@ -312,18 +298,18 @@ export default function MailConfigPage() {
     setShowRuleModal(true);
   };
 
-  // Active connection status
   const connectionStatus = () => {
-    if (config.provider === "resend_domain" && config.resend_domain_verified) {
-      return { label: "Dominio verificado ✅", sub: `Enviando y recibiendo desde ${config.resend_domain}`, color: "bg-green-50 border-green-200 text-green-700" };
+    const method = config.connection_method ?? "none";
+    if (method === "forwarding") {
+      return { label: "Reenvío automático activo", sub: `Recibiendo emails en ${config.inbound_address}`, color: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400" };
     }
-    if (config.provider === "resend_domain" && config.resend_domain) {
-      return { label: "DNS pendiente ⏳", sub: `Dominio ${config.resend_domain} — verificando DNS`, color: "bg-yellow-50 border-yellow-200 text-yellow-700" };
+    if (method === "imap") {
+      return { label: "Casilla conectada", sub: `Sincronizando ${config.email_address}`, color: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400" };
     }
-    if (config.provider === "smtp") {
-      return { label: "SMTP configurado", sub: `Enviando desde ${config.email_address}`, color: "bg-blue-50 border-blue-200 text-blue-700" };
+    if (method === "smtp_only") {
+      return { label: "Solo envío configurado", sub: `Enviando desde ${config.email_address}`, color: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-400" };
     }
-    return { label: "Sin configurar", sub: "Respondés desde dominio compartido de la plataforma", color: "bg-gray-50 border-gray-200 text-gray-600" };
+    return { label: "Sin configurar", sub: "Configurá tu email para recibir y responder desde la plataforma", color: "bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-400" };
   };
 
   const status = connectionStatus();
@@ -341,7 +327,7 @@ export default function MailConfigPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Configuración de Mails</h1>
-          <p className="text-muted-foreground">Configurá las opciones de gestión de correo electrónico</p>
+          <p className="text-muted-foreground">Configurá cómo recibís y respondés los emails de tus clientes</p>
         </div>
         <div className="flex items-center gap-2 text-sm font-medium mr-4">
           {saveStatus === "saving" && <><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /><span className="text-muted-foreground">Guardando...</span></>}
@@ -367,155 +353,332 @@ export default function MailConfigPage() {
         {/* =================== CONEXIÓN =================== */}
         <TabsContent value="connection" className="mt-6 space-y-6">
 
-          {/* Case B: Resend Domain */}
+          {/* Email address field */}
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-primary" />
-                <div>
-                  <CardTitle>Dominio propio con Resend</CardTitle>
-                  <CardDescription>
-                    Recibí y enviá emails desde tu dominio. Requiere configurar 2 registros DNS.
-                  </CardDescription>
-                </div>
-                <Badge variant="outline" className="ml-auto bg-green-50 text-green-700 border-green-200">
-                  Recomendado
-                </Badge>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                ¿Cuál es tu email de atención al cliente?
+              </CardTitle>
+              <CardDescription>
+                Es el email desde el que le escribís a tus clientes (ej: soporte@tuempresa.com, contacto@mitienda.com)
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="miempresa.com"
-                  value={domainInput}
-                  onChange={(e) => setDomainInput(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={verifyDomain} disabled={verifying || !domainInput}>
-                  {verifying ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  {config.resend_domain ? "Re-verificar" : "Configurar"}
-                </Button>
-              </div>
+            <CardContent>
+              <Input
+                type="email"
+                placeholder="soporte@tuempresa.com"
+                value={config.email_address}
+                onChange={(e) => setConfig(c => ({ ...c, email_address: e.target.value }))}
+                onBlur={() => saveConfig()}
+                className="max-w-md text-base"
+              />
+            </CardContent>
+          </Card>
 
-              {dnsRecords.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Registros DNS a agregar en tu proveedor:</p>
-                  <div className="rounded-md border overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/50">
-                          <th className="p-3 text-left font-medium">Tipo</th>
-                          <th className="p-3 text-left font-medium">Nombre</th>
-                          <th className="p-3 text-left font-medium">Valor</th>
-                          <th className="p-3 text-left font-medium">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dnsRecords.map((rec, i) => (
-                          <tr key={i} className="border-b last:border-0">
-                            <td className="p-3 font-mono text-xs">{rec.type}</td>
-                            <td className="p-3 font-mono text-xs">{rec.name}</td>
-                            <td className="p-3 font-mono text-xs break-all">{rec.value}{rec.priority ? ` (Prioridad ${rec.priority})` : ""}</td>
-                            <td className="p-3">
-                              {rec.status === "verified" ? (
-                                <Badge className="bg-green-100 text-green-700 border-green-200">
-                                  <CheckCircle2 className="h-3 w-3 mr-1" /> Verificado
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">
-                                  <Clock className="h-3 w-3 mr-1" /> Pendiente
-                                </Badge>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {/* Connection method selector */}
+          <div>
+            <h2 className="text-lg font-semibold mb-1">¿Cómo querés recibir los emails de tus clientes?</h2>
+            <p className="text-sm text-muted-foreground mb-4">Elegí la opción que mejor se adapte a tu caso</p>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              {/* Option 1: Forwarding */}
+              <Card
+                className={`cursor-pointer transition-all hover:shadow-md ${
+                  config.connection_method === "forwarding"
+                    ? "ring-2 ring-primary border-primary"
+                    : ""
+                }`}
+                onClick={() => handleUpdate({ connection_method: "forwarding", provider: "forwarding" })}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-green-100 dark:bg-green-900 p-2.5 shrink-0">
+                      <Inbox className="h-5 w-5 text-green-700 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">Reenvío automático</h3>
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] dark:bg-green-950 dark:text-green-400 dark:border-green-800">
+                          Recomendado
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Recibí los emails de tus clientes sin compartir tu contraseña. Solo configurás un reenvío.
+                      </p>
+                    </div>
                   </div>
-                  <a
-                    href="https://resend.com/docs/dashboard/domains/introduction"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                  >
-                    Ver guía completa de DNS <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              )}
+                </CardContent>
+              </Card>
 
-              {!dnsRecords.length && !config.resend_domain && (
-                <div className="rounded-lg border p-4 bg-blue-50 border-blue-200 text-sm text-blue-800">
-                  <p className="font-medium text-blue-900 mb-1">¿Cómo funciona?</p>
-                  <ol className="list-decimal list-inside space-y-1 text-blue-800">
-                    <li>Ingresá tu dominio (ej: <code className="bg-blue-100 px-1 rounded">miempresa.com</code>)</li>
-                    <li>Hacé click en &quot;Configurar&quot; — te mostramos los registros DNS a agregar</li>
-                    <li>Agregalos en tu proveedor de dominio (Cloudflare, GoDaddy, etc.)</li>
-                    <li>Hacé click en &quot;Re-verificar&quot; — listo ✅</li>
-                  </ol>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              {/* Option 2: IMAP */}
+              <Card
+                className={`cursor-pointer transition-all hover:shadow-md ${
+                  config.connection_method === "imap"
+                    ? "ring-2 ring-primary border-primary"
+                    : ""
+                }`}
+                onClick={() => router.push("/mails/config/connect")}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-blue-100 dark:bg-blue-900 p-2.5 shrink-0">
+                      <Link2 className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Conectar tu casilla</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Conectamos directo a tu email para recibir y responder automáticamente.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Case C: SMTP */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Server className="h-5 w-5" />
-                <div>
-                  <CardTitle>SMTP propio</CardTitle>
-                  <CardDescription>
-                    Enviá desde tu cuenta de Gmail, Outlook u otro servidor. Solo envío (no recepción automática).
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              {/* Option 3: SMTP only */}
+              <Card
+                className={`cursor-pointer transition-all hover:shadow-md ${
+                  config.connection_method === "smtp_only"
+                    ? "ring-2 ring-primary border-primary"
+                    : ""
+                }`}
+                onClick={() => handleUpdate({ connection_method: "smtp_only", provider: "smtp" })}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-2.5 shrink-0">
+                      <Send className="h-5 w-5 text-gray-700 dark:text-gray-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Solo enviar</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Solo respondé desde la plataforma. No recibís emails automáticamente.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Forwarding details */}
+          {config.connection_method === "forwarding" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ArrowRight className="h-4 w-4" />
+                  Configurar reenvío
+                </CardTitle>
+                <CardDescription>
+                  Configurá tu email para que reenvíe automáticamente los mensajes a la dirección de abajo
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {/* Assigned address */}
                 <div className="space-y-2">
-                  <Label>Host SMTP</Label>
-                  <Input placeholder="smtp.gmail.com" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
+                  <Label className="text-sm font-medium">Tu dirección de reenvío</Label>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1 px-3 py-2 bg-muted rounded-md font-mono text-sm border">
+                      {inboundAddress ?? "Generando..."}
+                    </div>
+                    {inboundAddress && (
+                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(inboundAddress)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">¿Cómo se configura? (2 minutos)</p>
+
+                  {/* Gmail instructions */}
+                  <details className="group border rounded-lg">
+                    <summary className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50">
+                      <div className="h-6 w-6 rounded bg-white border flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-red-500">G</span>
+                      </div>
+                      <span className="font-medium text-sm">Gmail</span>
+                      <ArrowRight className="h-4 w-4 ml-auto transition-transform group-open:rotate-90 text-muted-foreground" />
+                    </summary>
+                    <div className="px-4 pb-4 space-y-2 text-sm text-muted-foreground">
+                      <ol className="list-decimal list-inside space-y-1.5">
+                        <li>Abrí <a href="https://mail.google.com/mail/u/0/#settings/fwdandpop" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">Configuración de Gmail <ExternalLink className="h-3 w-3" /></a></li>
+                        <li>Hacé click en <strong>&quot;Agregar una dirección de reenvío&quot;</strong></li>
+                        <li>Ingresá: <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{inboundAddress}</code></li>
+                        <li>Gmail te va a enviar un email de confirmación — lo vas a ver en tu Inbox de la plataforma</li>
+                        <li>Confirmá y activá el reenvío</li>
+                      </ol>
+                    </div>
+                  </details>
+
+                  {/* Outlook instructions */}
+                  <details className="group border rounded-lg">
+                    <summary className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50">
+                      <div className="h-6 w-6 rounded bg-white border flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-blue-600">O</span>
+                      </div>
+                      <span className="font-medium text-sm">Outlook / Hotmail</span>
+                      <ArrowRight className="h-4 w-4 ml-auto transition-transform group-open:rotate-90 text-muted-foreground" />
+                    </summary>
+                    <div className="px-4 pb-4 space-y-2 text-sm text-muted-foreground">
+                      <ol className="list-decimal list-inside space-y-1.5">
+                        <li>Abrí <a href="https://outlook.live.com/mail/0/options/mail/forwarding" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">Configuración de Outlook <ExternalLink className="h-3 w-3" /></a></li>
+                        <li>Activá <strong>&quot;Habilitar reenvío&quot;</strong></li>
+                        <li>Ingresá: <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{inboundAddress}</code></li>
+                        <li>Marcá &quot;Conservar una copia&quot; si querés mantener los emails también en Outlook</li>
+                        <li>Guardá los cambios</li>
+                      </ol>
+                    </div>
+                  </details>
+
+                  {/* Other providers */}
+                  <details className="group border rounded-lg">
+                    <summary className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50">
+                      <div className="h-6 w-6 rounded bg-white border flex items-center justify-center shrink-0">
+                        <Mail className="h-3.5 w-3.5 text-gray-500" />
+                      </div>
+                      <span className="font-medium text-sm">Otro proveedor</span>
+                      <ArrowRight className="h-4 w-4 ml-auto transition-transform group-open:rotate-90 text-muted-foreground" />
+                    </summary>
+                    <div className="px-4 pb-4 text-sm text-muted-foreground">
+                      <p>Buscá en la configuración de tu proveedor de email la opción de <strong>&quot;Reenvío&quot;</strong> o <strong>&quot;Forwarding&quot;</strong> y configuralo para que reenvíe a:</p>
+                      <code className="block mt-2 bg-muted px-3 py-2 rounded text-xs font-mono">{inboundAddress}</code>
+                    </div>
+                  </details>
+                </div>
+
+                {config.connection_method !== "forwarding" && (
+                  <Button onClick={activateForwarding} disabled={saving}>
+                    Activar reenvío
+                  </Button>
+                )}
+
+                {/* Optional SMTP for replies */}
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Send className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Responder desde tu email (opcional)</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Si configurás SMTP, las respuestas van a salir desde tu email real. Si no, salen desde el dominio de la plataforma.
+                  </p>
+                  <details className="group border rounded-lg">
+                    <summary className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/50 text-sm">
+                      <span className="font-medium">Configurar SMTP para envío</span>
+                      <ArrowRight className="h-4 w-4 ml-auto transition-transform group-open:rotate-90 text-muted-foreground" />
+                    </summary>
+                    <div className="px-3 pb-3 space-y-3">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Host</Label>
+                          <Input placeholder="smtp.gmail.com" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} className="h-9 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Puerto</Label>
+                          <Input type="number" placeholder="587" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} className="h-9 text-sm" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Usuario</Label>
+                        <Input placeholder="usuario@gmail.com" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Contraseña</Label>
+                        <Input type="password" placeholder="••••••••" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Email &quot;From&quot;</Label>
+                        <Input placeholder="soporte@tuempresa.com" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                      <Button size="sm" onClick={saveSMTP} disabled={saving || !smtpHost || !smtpUser || !smtpFrom}>
+                        Guardar SMTP
+                      </Button>
+                    </div>
+                  </details>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* IMAP connected status */}
+          {config.connection_method === "imap" && (
+            <Card>
+              <CardContent className="py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-green-100 dark:bg-green-900 p-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Casilla conectada</p>
+                    <p className="text-xs text-muted-foreground">
+                      Sincronizando {config.email_address} — se revisan nuevos emails cada pocos minutos
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => router.push("/mails/config/connect")}>
+                  Modificar conexión
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* SMTP only details */}
+          {config.connection_method === "smtp_only" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Configurar envío por SMTP</CardTitle>
+                <CardDescription>
+                  Configurá las credenciales de tu servidor de email para enviar respuestas desde tu dirección.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border p-3 bg-amber-50 border-amber-200 text-sm text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-400">
+                  <AlertCircle className="h-4 w-4 inline mr-1" />
+                  Con esta opción no vas a recibir emails automáticamente en la plataforma. Si querés recibir también, elegí &quot;Reenvío automático&quot; o &quot;Conectar tu casilla&quot;.
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Host SMTP</Label>
+                    <Input placeholder="smtp.gmail.com" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Puerto</Label>
+                    <Input type="number" placeholder="587" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Puerto</Label>
-                  <Input type="number" placeholder="587" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
+                  <Label>Usuario SMTP</Label>
+                  <Input placeholder="usuario@gmail.com" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Usuario SMTP</Label>
-                <Input placeholder="usuario@gmail.com" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Contraseña / App Password</Label>
-                <Input type="password" placeholder="••••••••" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Email &quot;From&quot;</Label>
-                <Input placeholder="soporte@miempresa.com" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} />
-              </div>
-              <div className="rounded-lg border p-4 bg-yellow-50 border-yellow-200 text-sm text-yellow-800">
-                <AlertCircle className="h-4 w-4 inline mr-1" />
-                <strong>Importante:</strong> El SMTP solo habilita el <em>envío</em>. Para <em>recibir</em> emails automáticamente en el inbox, necesitás configurar también el dominio con Resend (arriba).
-              </div>
-              <Button onClick={saveSMTP} disabled={saving || !smtpHost || !smtpUser || !smtpFrom}>
-                <Save className="mr-2 h-4 w-4" /> Guardar SMTP
-              </Button>
-            </CardContent>
-          </Card>
+                <div className="space-y-2">
+                  <Label>Contraseña / App Password</Label>
+                  <Input type="password" placeholder="••••••••" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email &quot;From&quot;</Label>
+                  <Input placeholder="soporte@miempresa.com" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} />
+                </div>
+                <Button onClick={saveSMTP} disabled={saving || !smtpHost || !smtpUser || !smtpFrom}>
+                  Guardar SMTP
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Case A: info */}
-          <Card className="border-dashed">
-            <CardContent className="py-4 flex gap-3 items-start">
-              <Mail className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
-              <div className="text-sm">
-                <p className="font-medium text-muted-foreground">Sin configuración (fallback)</p>
-                <p className="text-muted-foreground text-xs mt-1">
-                  Si no configurás ninguna de las opciones anteriores, podés igualmente responder emails pero saldrán desde un dominio compartido de la plataforma.
-                  Los clientes verán que el email viene de un dominio genérico.
+          {/* No method selected hint */}
+          {(!config.connection_method || config.connection_method === "none") && (
+            <Card className="border-dashed">
+              <CardContent className="py-6 text-center">
+                <Mail className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-30" />
+                <p className="font-medium text-muted-foreground">Elegí un método de conexión arriba</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Te recomendamos &quot;Reenvío automático&quot; — es la forma más fácil y segura
                 </p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* =================== PERSONALIZACIÓN =================== */}
@@ -640,7 +803,7 @@ export default function MailConfigPage() {
                         Asunto del email de ejemplo
                       </h2>
                       <p className="text-[15px] text-zinc-700 leading-relaxed">
-                        Hola <strong>Cliente</strong> 👋<br /><br />
+                        Hola <strong>Cliente</strong><br /><br />
                         Este es el cuerpo del email. Aquí va el contenido principal del mensaje.
                       </p>
                       <div className="mt-6 py-4 text-center">
@@ -747,8 +910,6 @@ export default function MailConfigPage() {
                   </div>
                 </div>
               )}
-
-              {/* Removed Guardar button as it auto-saves now */}
             </CardContent>
           </Card>
         </TabsContent>

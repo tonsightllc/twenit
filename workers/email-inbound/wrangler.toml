@@ -1,0 +1,7 @@
+name = "email-inbound"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+[vars]
+WEBHOOK_URL = "https://www.twenit.com/api/webhooks/inbound"
+# INBOUND_SECRET should be set as a secret: wrangler secret put INBOUND_SECRET

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserOrg } from "@/lib/supabase/get-user-org";
 import { createServiceClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-// POST /api/emails/reply
 export async function POST(request: NextRequest) {
-  const { user, orgId, profile } = await getUserOrg();
+  const { user, orgId } = await getUserOrg();
   if (!user || !orgId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
 
   const serviceClient = await createServiceClient();
 
-  // Fetch the original email
   const { data: original, error: fetchError } = await serviceClient
     .from("inbound_emails")
     .select("*")
@@ -29,7 +28,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email not found" }, { status: 404 });
   }
 
-  // Fetch the org's email config to determine sending mode
   const { data: emailConfig } = await serviceClient
     .from("email_configs")
     .select("*")
@@ -40,28 +38,54 @@ export async function POST(request: NextRequest) {
   const replySubject = subject ?? `Re: ${original.subject ?? "(sin asunto)"}`;
   const toEmail = original.reply_to ?? original.from_email;
 
-  let fromEmail: string;
-  let sentResendMessageId: string | null = null;
-
-  // Determine from email based on active case
-  if (emailConfig?.provider === "resend_domain" && emailConfig?.resend_domain_verified && emailConfig?.resend_domain) {
-    // Case B: own domain via Resend
-    fromEmail = `${senderName} <soporte@${emailConfig.resend_domain}>`;
-  } else if (emailConfig?.provider === "smtp" && emailConfig?.credentials) {
-    // Case C: SMTP — for now we still use Resend as transport since nodemailer isn't set up
-    // SMTP sending is proxied; the "from" shows org's address using Resend relay
-    fromEmail = `${senderName} <${emailConfig.email_address ?? process.env.RESEND_FROM_EMAIL ?? "noreply@resend.dev"}>`;
-  } else {
-    // Case A: generic fallback
-    fromEmail = `${senderName} <onboarding@resend.dev>`;
-  }
-
-  // Add signature if configured
   const fullBody = emailConfig?.signature
     ? `${body}\n\n---\n${emailConfig.signature}`
     : body;
 
-  if (process.env.RESEND_API_KEY) {
+  const creds = emailConfig?.credentials as {
+    smtp_host?: string;
+    smtp_port?: string;
+    smtp_user?: string;
+    smtp_pass?: string;
+    smtp_from?: string;
+  } | null;
+
+  const hasSmtp = creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass;
+  const fromAddress = hasSmtp
+    ? (creds.smtp_from ?? emailConfig?.email_address ?? creds.smtp_user)
+    : emailConfig?.email_address ?? "noreply@resend.dev";
+  const fromEmail = `${senderName} <${fromAddress}>`;
+
+  let sentMessageId: string | null = null;
+  let sendMethod: "smtp" | "resend" | "none" = "none";
+
+  // Priority: SMTP > Resend > none
+  if (hasSmtp) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: creds.smtp_host,
+        port: parseInt(creds.smtp_port ?? "587"),
+        secure: parseInt(creds.smtp_port ?? "587") === 465,
+        auth: { user: creds.smtp_user, pass: creds.smtp_pass },
+      });
+
+      const info = await transporter.sendMail({
+        from: fromEmail,
+        to: toEmail,
+        subject: replySubject,
+        text: fullBody,
+        replyTo: emailConfig?.reply_to_email ?? undefined,
+        inReplyTo: original.thread_id ?? undefined,
+        references: original.thread_id ?? undefined,
+      });
+
+      sentMessageId = info.messageId ?? null;
+      sendMethod = "smtp";
+    } catch (err) {
+      console.error("SMTP send error:", err);
+      return NextResponse.json({ error: "Error al enviar por SMTP" }, { status: 500 });
+    }
+  } else if (process.env.RESEND_API_KEY) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { data: sent, error: sendError } = await resend.emails.send({
       from: fromEmail,
@@ -74,13 +98,12 @@ export async function POST(request: NextRequest) {
 
     if (sendError) {
       console.error("Resend error:", sendError);
-      return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+      return NextResponse.json({ error: "Error al enviar por Resend" }, { status: 500 });
     }
-
-    sentResendMessageId = sent?.id ?? null;
+    sentMessageId = sent?.id ?? null;
+    sendMethod = "resend";
   }
 
-  // Save reply to DB
   const { data: reply, error: replyError } = await serviceClient
     .from("email_replies")
     .insert({
@@ -91,7 +114,7 @@ export async function POST(request: NextRequest) {
       body_text: fullBody,
       sent_by: user.id,
       is_auto_reply: false,
-      resend_message_id: sentResendMessageId,
+      resend_message_id: sentMessageId,
     })
     .select()
     .single();
@@ -100,7 +123,6 @@ export async function POST(request: NextRequest) {
     console.error("Error saving reply:", replyError);
   }
 
-  // Mark original as read
   await serviceClient
     .from("inbound_emails")
     .update({ is_read: true, status: "processed" })
@@ -110,6 +132,7 @@ export async function POST(request: NextRequest) {
     success: true,
     reply,
     from: fromEmail,
-    warning: !process.env.RESEND_API_KEY ? "RESEND_API_KEY not set — email was saved but not sent" : undefined,
+    sendMethod,
+    warning: sendMethod === "none" ? "No hay SMTP ni Resend configurado — el email se guardó pero no se envió" : undefined,
   });
 }
