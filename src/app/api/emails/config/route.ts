@@ -5,8 +5,17 @@ import { createEmailRoute } from "@/lib/cloudflare-email";
 
 const INBOUND_DOMAIN = "mail.twenit.com";
 
-function generateInboundAddress(slug: string): string {
-  return `${slug}@${INBOUND_DOMAIN}`;
+function sanitizeForEmail(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .replace(/-\d{10,}$/, "");
+}
+
+function generateInboundAddress(orgName: string): string {
+  return `${sanitizeForEmail(orgName)}@${INBOUND_DOMAIN}`;
 }
 
 export async function GET() {
@@ -26,16 +35,15 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // If no inbound_address yet, generate one from org slug
   if (data && !data.inbound_address) {
     const { data: org } = await serviceClient
       .from("organizations")
-      .select("slug")
+      .select("name")
       .eq("id", orgId)
       .single();
 
-    if (org?.slug) {
-      const inbound = generateInboundAddress(org.slug);
+    if (org?.name) {
+      const inbound = generateInboundAddress(org.name);
       await serviceClient
         .from("email_configs")
         .update({ inbound_address: inbound })
@@ -44,17 +52,16 @@ export async function GET() {
     }
   }
 
-  // If no config exists yet, return a generated inbound_address for the UI
   if (!data) {
     const { data: org } = await serviceClient
       .from("organizations")
-      .select("slug")
+      .select("name")
       .eq("id", orgId)
       .single();
 
     return NextResponse.json({
       config: null,
-      generatedInboundAddress: org?.slug ? generateInboundAddress(org.slug) : null,
+      generatedInboundAddress: org?.name ? generateInboundAddress(org.name) : null,
     });
   }
 
@@ -96,16 +103,15 @@ export async function POST(request: NextRequest) {
     .eq("org_id", orgId)
     .maybeSingle();
 
-  // Generate inbound_address if not set
   let inboundAddress = existing?.inbound_address ?? null;
   if (!inboundAddress) {
     const { data: org } = await serviceClient
       .from("organizations")
-      .select("slug")
+      .select("name")
       .eq("id", orgId)
       .single();
-    if (org?.slug) {
-      inboundAddress = generateInboundAddress(org.slug);
+    if (org?.name) {
+      inboundAddress = generateInboundAddress(org.name);
     }
   }
 
