@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShoppingCart, TrendingUp, Users, CreditCard, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
+import { NewCustomersChart } from "@/components/charts/new-customers-chart";
+import { aggregateNewCustomers } from "@/lib/charts/customer-stats";
 
 export default async function VentasPage() {
   const { supabase, user, orgId } = await getUserOrg();
@@ -78,6 +80,15 @@ export default async function VentasPage() {
     .single();
 
   const isStripeConnected = !!stripeConnection;
+
+  // Get all customer creation dates for the chart
+  const { data: customerDates } = await supabase
+    .from("customers")
+    .select("created_at")
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: true });
+
+  const customerChartData = aggregateNewCustomers(customerDates ?? []);
 
   return (
     <div className="space-y-6">
@@ -158,6 +169,9 @@ export default async function VentasPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* New Customers Chart */}
+          <NewCustomersChart data={customerChartData} />
 
           {/* Customers List */}
           <Card>
