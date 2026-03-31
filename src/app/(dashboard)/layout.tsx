@@ -2,6 +2,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { Header } from "@/components/dashboard/header";
 import { OrgProvider } from "@/components/providers/org-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -125,6 +126,7 @@ export default async function DashboardLayout({
           <main className="flex-1 p-6">{children}</main>
         </SidebarInset>
       </SidebarProvider>
+      <Toaster richColors position="top-right" />
     </OrgProvider>
   );
 }

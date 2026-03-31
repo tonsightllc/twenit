@@ -24,8 +24,12 @@ export default {
       const parser = new PostalMime();
       const parsed = await parser.parse(arrayBuffer);
 
+      const originalFrom = parsed.from?.address || message.from;
+      const fromName = parsed.from?.name || null;
+
       const payload = {
-        from: message.from,
+        from: originalFrom,
+        fromName,
         to: message.to,
         subject: parsed.subject || "(Sin asunto)",
         text: parsed.text || null,
