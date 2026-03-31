@@ -48,24 +48,35 @@ export async function POST(request: NextRequest) {
     smtp_user?: string;
     smtp_pass?: string;
     smtp_from?: string;
+    resend_api_key?: string;
   } | null;
 
-  const hasSmtp = creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass;
+  const hasSmtp = !!(creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass);
+  const hasClientResend = !!creds?.resend_api_key;
+  const hasPlatformResend = !!process.env.RESEND_API_KEY;
 
   const RESEND_FROM_DOMAIN = process.env.RESEND_FROM_DOMAIN ?? "twenit.com";
 
-  const fromAddress = hasSmtp
-    ? (creds.smtp_from ?? emailConfig?.email_address ?? creds.smtp_user)
-    : `noreply@${RESEND_FROM_DOMAIN}`;
+  let fromAddress: string;
+  let replyToAddress: string | undefined;
+
+  if (hasSmtp) {
+    fromAddress = creds.smtp_from ?? emailConfig?.email_address ?? creds.smtp_user!;
+    replyToAddress = emailConfig?.reply_to_email ?? undefined;
+  } else if (hasClientResend) {
+    fromAddress = emailConfig?.email_address ?? `noreply@${RESEND_FROM_DOMAIN}`;
+    replyToAddress = emailConfig?.reply_to_email ?? undefined;
+  } else {
+    fromAddress = `noreply@${RESEND_FROM_DOMAIN}`;
+    replyToAddress = emailConfig?.email_address ?? emailConfig?.reply_to_email ?? undefined;
+  }
+
   const fromEmail = `${senderName} <${fromAddress}>`;
 
-  const replyToAddress = hasSmtp
-    ? (emailConfig?.reply_to_email ?? undefined)
-    : (emailConfig?.email_address ?? emailConfig?.reply_to_email ?? undefined);
-
   let sentMessageId: string | null = null;
-  let sendMethod: "smtp" | "resend" | "none" = "none";
+  let sendMethod: "smtp" | "resend_client" | "resend_platform" = "resend_platform";
 
+  // Priority: 1) SMTP  2) Client Resend  3) Platform Resend  4) Error
   if (hasSmtp) {
     try {
       const transporter = nodemailer.createTransport({
@@ -92,7 +103,31 @@ export async function POST(request: NextRequest) {
       console.error("SMTP send error:", err);
       return NextResponse.json({ error: `Error al enviar por SMTP: ${msg}` }, { status: 500 });
     }
-  } else if (process.env.RESEND_API_KEY) {
+  } else if (hasClientResend) {
+    try {
+      const resend = new Resend(creds.resend_api_key);
+      const { data: sent, error: sendError } = await resend.emails.send({
+        from: fromEmail,
+        to: [toEmail],
+        subject: replySubject,
+        text: fullBody,
+        replyTo: replyToAddress,
+        headers: original.thread_id ? { "In-Reply-To": original.thread_id } : undefined,
+      });
+
+      if (sendError) {
+        console.error("Client Resend error:", sendError);
+        const detail = (sendError as { message?: string })?.message ?? "Error desconocido";
+        return NextResponse.json({ error: `No se pudo enviar: ${detail}` }, { status: 500 });
+      }
+      sentMessageId = sent?.id ?? null;
+      sendMethod = "resend_client";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      console.error("Client Resend error:", err);
+      return NextResponse.json({ error: `Error con Resend: ${msg}` }, { status: 500 });
+    }
+  } else if (hasPlatformResend) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { data: sent, error: sendError } = await resend.emails.send({
       from: fromEmail,
@@ -104,15 +139,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (sendError) {
-      console.error("Resend error:", sendError);
+      console.error("Platform Resend error:", sendError);
       const detail = (sendError as { message?: string })?.message ?? "Error desconocido";
       return NextResponse.json({ error: `No se pudo enviar el email: ${detail}` }, { status: 500 });
     }
     sentMessageId = sent?.id ?? null;
-    sendMethod = "resend";
+    sendMethod = "resend_platform";
   } else {
     return NextResponse.json({
-      error: "No hay método de envío configurado. Configurá SMTP o verificá tu dominio en Resend.",
+      error: "No hay método de envío configurado. Configurá SMTP o Resend.",
     }, { status: 422 });
   }
 
