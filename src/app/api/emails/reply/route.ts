@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     smtp_pass?: string;
     smtp_from?: string;
     resend_api_key?: string;
+    resend_from_email?: string;
   } | null;
 
   const hasSmtp = !!(creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass);
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     fromAddress = creds.smtp_from ?? emailConfig?.email_address ?? creds.smtp_user!;
     replyToAddress = emailConfig?.reply_to_email ?? undefined;
   } else if (hasClientResend) {
-    fromAddress = emailConfig?.email_address ?? `noreply@${RESEND_FROM_DOMAIN}`;
+    fromAddress = creds.resend_from_email ?? emailConfig?.email_address ?? `noreply@${RESEND_FROM_DOMAIN}`;
     replyToAddress = emailConfig?.reply_to_email ?? undefined;
   } else {
     fromAddress = `noreply@${RESEND_FROM_DOMAIN}`;

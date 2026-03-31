@@ -70,7 +70,7 @@ export default function MailConfigPage() {
   const connectionStatus = () => {
     const method = config.connection_method ?? "none";
     if (method === "resend_client") {
-      return { label: "Resend conectado", sub: `Enviando y recibiendo como ${config.email_address}`, color: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400" };
+      return { label: "Resend conectado", sub: "Enviando y recibiendo emails con tu cuenta de Resend", color: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400" };
     }
     if (method === "forwarding") {
       return { label: "Reenvío automático activo", sub: `Recibiendo emails en ${config.inbound_address}`, color: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400" };

@@ -34,6 +34,12 @@ export function ConnectionTab({ config, inboundAddress, saving, onUpdate, onSave
   const [smtpFrom, setSmtpFrom] = useState(config.credentials?.smtp_from ?? "");
 
   const [resendApiKey, setResendApiKey] = useState(config.credentials?.resend_api_key ?? "");
+  const defaultResendFrom = () => {
+    if (config.credentials?.resend_from_email) return config.credentials.resend_from_email;
+    const domain = config.email_address?.split("@")[1];
+    return domain ? `reply@${domain}` : "";
+  };
+  const [resendFromEmail, setResendFromEmail] = useState(defaultResendFrom);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -63,6 +69,7 @@ export function ConnectionTab({ config, inboundAddress, saving, onUpdate, onSave
       credentials: {
         ...config.credentials,
         resend_api_key: resendApiKey,
+        resend_from_email: resendFromEmail,
       },
     });
   };
@@ -272,19 +279,28 @@ export function ConnectionTab({ config, inboundAddress, saving, onUpdate, onSave
                 />
               </div>
 
-              <Button onClick={saveResendClient} disabled={saving || !resendApiKey || !config.email_address}>
+              <div className="space-y-2">
+                <Label className="text-sm">Email de envío</Label>
+                <Input
+                  type="email"
+                  placeholder="soporte@support.tuempresa.com"
+                  value={resendFromEmail}
+                  onChange={(e) => setResendFromEmail(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  El email exacto desde el que vas a enviar. Tiene que usar el dominio que verificaste en Resend.
+                </p>
+              </div>
+
+              <Button onClick={saveResendClient} disabled={saving || !resendApiKey || !resendFromEmail}>
                 Guardar conexión
               </Button>
-
-              {!config.email_address && (
-                <p className="text-xs text-amber-600">Completá el email de atención al cliente arriba antes de guardar.</p>
-              )}
             </div>
 
             {config.credentials?.resend_api_key && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm dark:bg-green-950 dark:border-green-800 dark:text-green-400">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                Resend conectado — enviando y recibiendo como {config.email_address}
+                Resend conectado — tu cuenta está lista para enviar y recibir emails
               </div>
             )}
           </CardContent>
