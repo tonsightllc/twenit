@@ -16,9 +16,6 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Twenit",
   description: "CRM para gestionar ventas, soporte y retención",
-  icons: {
-    icon: "/favicon.jpg",
-  },
 };
 
 export default function RootLayout({

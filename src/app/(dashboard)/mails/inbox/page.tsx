@@ -140,6 +140,7 @@ export default function InboxPage() {
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [replies, setReplies] = useState<EmailReply[]>([]);
+  const [hasSmtp, setHasSmtp] = useState<boolean | null>(null);
 
   const supabase = createClient();
 
@@ -170,9 +171,19 @@ export default function InboxPage() {
     }
   }, []);
 
+  const fetchEmailConfig = useCallback(async () => {
+    const res = await fetch("/api/emails/config");
+    if (res.ok) {
+      const { config } = await res.json();
+      const creds = config?.credentials;
+      setHasSmtp(!!(creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass));
+    }
+  }, []);
+
   useEffect(() => {
     fetchEmails();
     fetchLabels();
+    fetchEmailConfig();
 
     const channel = supabase
       .channel("inbox-realtime")
@@ -733,6 +744,17 @@ export default function InboxPage() {
 
                   {/* Reply input */}
                   <div className="border-t p-4 shrink-0 space-y-3">
+                    {hasSmtp === false && (
+                      <div className="flex items-center gap-2 p-2.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span>
+                          Las respuestas se envían desde twenit.com. Para enviar desde tu propio email,{" "}
+                          <a href="/mails/config" className="font-medium underline hover:no-underline">
+                            configurá tu conexión SMTP
+                          </a>.
+                        </span>
+                      </div>
+                    )}
                     <textarea
                       className="w-full min-h-[90px] p-3 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                       placeholder="Escribí tu respuesta..."

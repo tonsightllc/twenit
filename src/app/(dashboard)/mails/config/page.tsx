@@ -562,7 +562,7 @@ export default function MailConfigPage() {
                     <span className="text-sm font-medium">Responder desde tu email (opcional)</span>
                   </div>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Si configurás SMTP, las respuestas van a salir desde tu email real. Si no, salen desde el dominio de la plataforma.
+                    Si configurás SMTP, las respuestas van a salir desde tu email real. Si no, salen desde twenit.com.
                   </p>
                   <details className="group border rounded-lg">
                     <summary className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/50 text-sm">
