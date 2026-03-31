@@ -98,9 +98,9 @@ export default async function DashboardPage() {
         .eq("org_id", orgId),
       supabase
         .from("subscriptions")
-        .select("id") // We can add sum(amout) later if needed
+        .select("id")
         .eq("org_id", orgId)
-        .eq("status", "active"),
+        .in("status", ["active", "trialing", "past_due"]),
       supabase.from("email_configs").select("domain").eq("org_id", orgId),
       supabase
         .from("bot_configs")

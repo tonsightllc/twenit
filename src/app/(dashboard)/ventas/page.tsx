@@ -42,7 +42,7 @@ export default async function VentasPage() {
     .from("subscriptions")
     .select("*", { count: "exact", head: true })
     .eq("org_id", orgId)
-    .eq("status", "active");
+    .in("status", ["active", "trialing", "past_due"]);
 
   // Count customers created today
   const todayStart = new Date();

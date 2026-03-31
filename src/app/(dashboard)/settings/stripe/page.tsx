@@ -147,7 +147,7 @@ export default function StripeSettingsPage() {
           .from("subscriptions")
           .select("*", { count: "exact", head: true })
           .eq("org_id", orgId)
-          .eq("status", "active"),
+          .in("status", ["active", "trialing", "past_due"]),
       ]);
 
     setConnection(stripeConnection ? {

@@ -76,7 +76,7 @@ export default async function DesuscripcionPage() {
     .from("subscriptions")
     .select("*", { count: "exact", head: true })
     .eq("org_id", orgId)
-    .eq("status", "active");
+    .in("status", ["active", "trialing", "past_due"]);
 
   const totalBase = (totalActive || 0) + (canceledThisMonth || 0);
   const churnRate = totalBase > 0 ? ((canceledThisMonth || 0) / totalBase) * 100 : 0;
