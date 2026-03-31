@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { processInboundEmail } from "@/lib/emails/process-inbound";
 
-/**
- * Generic inbound email webhook.
- * Receives emails from Cloudflare Email Worker (or any external forwarder).
- * Resolves the org by matching the `to` address against email_configs.inbound_address.
- */
+function decodeSRS(email: string): string {
+  const srs0 = email.match(/^SRS0=[^=]+=\w+=([^=]+)=([^@]+)@/i);
+  if (srs0) return `${srs0[2]}@${srs0[1]}`;
+  const srs1 = email.match(/^SRS1=[^=]+=\w+=([^=]+)=([^=]+)=([^@]+)@/i);
+  if (srs1) return `${srs1[3]}@${srs1[2]}`;
+  return email;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const secret = process.env.INBOUND_WEBHOOK_SECRET;
@@ -38,9 +41,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown recipient" }, { status: 404 });
     }
 
+    const cleanFrom = decodeSRS(from);
+
     await processInboundEmail(supabase, {
       orgId: config.org_id,
-      from,
+      from: cleanFrom,
       to: toEmail,
       subject: subject || "(Sin asunto)",
       text,
