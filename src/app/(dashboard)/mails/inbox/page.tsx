@@ -43,6 +43,16 @@ interface Customer {
   activation_status: string;
 }
 
+interface EmailReply {
+  id: string;
+  to_email: string;
+  subject: string;
+  body_text: string;
+  sent_by: string;
+  is_auto_reply: boolean;
+  sent_at: string;
+}
+
 interface EmailLabel {
   id: string;
   name: string;
@@ -129,6 +139,7 @@ export default function InboxPage() {
   const [labels, setLabels] = useState<EmailLabel[]>([]);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [replies, setReplies] = useState<EmailReply[]>([]);
 
   const supabase = createClient();
 
@@ -202,10 +213,21 @@ export default function InboxPage() {
     if (data) setCustomer(data);
   }, [supabase]);
 
+  const fetchReplies = useCallback(async (emailId: string) => {
+    const { data } = await supabase
+      .from("email_replies")
+      .select("id, to_email, subject, body_text, sent_by, is_auto_reply, sent_at")
+      .eq("inbound_email_id", emailId)
+      .order("sent_at", { ascending: true });
+    setReplies(data ?? []);
+  }, [supabase]);
+
   const selectEmail = useCallback(async (email: MappedEmail) => {
     setSelectedEmail(email);
     setReplyContent("");
+    setReplies([]);
     fetchCustomer(email);
+    fetchReplies(email.id);
 
     // Mark as read
     if (!email.read) {
@@ -269,8 +291,11 @@ export default function InboxPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.warning ? `Guardado (${data.warning})` : `Respuesta enviada desde ${data.from}`);
+        toast.success(`Respuesta enviada`);
         setReplyContent("");
+        if (data.reply) {
+          setReplies((prev) => [...prev, data.reply]);
+        }
       } else {
         toast.error(data.error ?? "Error al enviar");
       }
@@ -655,19 +680,61 @@ export default function InboxPage() {
               </CardHeader>
 
               <div className="flex flex-1 min-h-0 overflow-hidden">
-                {/* Email body + reply */}
+                {/* Conversation thread + reply */}
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  {/* Body */}
-                  <div className="flex-1 overflow-y-auto p-5">
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                      {selectedEmail.content}
-                    </pre>
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    {/* Original inbound email */}
+                    <div className="flex gap-3">
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5">
+                        {selectedEmail.fromName[0]?.toUpperCase() ?? "?"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{selectedEmail.fromName}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(selectedEmail.date).toLocaleString("es-AR")}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 p-3 rounded-lg bg-muted/50 border">
+                          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                            {selectedEmail.content}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Replies */}
+                    {replies.map((reply) => (
+                      <div key={reply.id} className="flex gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <Send className="h-3.5 w-3.5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-primary">
+                              {reply.is_auto_reply ? "Respuesta automática" : "Tú"}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(reply.sent_at).toLocaleString("es-AR")}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              → {reply.to_email}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                              {reply.body_text}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
-                  {/* Reply */}
+                  {/* Reply input */}
                   <div className="border-t p-4 shrink-0 space-y-3">
                     <textarea
-                      className="w-full min-h-[110px] p-3 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="w-full min-h-[90px] p-3 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                       placeholder="Escribí tu respuesta..."
                       value={replyContent}
                       onChange={(e) => setReplyContent(e.target.value)}
