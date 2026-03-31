@@ -14,9 +14,12 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Plus, Edit, Trash2, Mail, FileText, Eye, Save, X, ArrowLeft,
   Sparkles, Loader2, Code, Braces, ChevronDown, ChevronUp,
-  PenLine, Settings2,
+  PenLine, Settings2, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TemplateEditor } from "@/components/mail-config/template-editor";
@@ -49,6 +52,41 @@ interface EmailTemplate {
   created_at: string;
   updated_at: string;
 }
+
+interface AISettings {
+  language: string;
+  tone: string;
+  length: string;
+  customInstructions: string;
+}
+
+const DEFAULT_AI_SETTINGS: AISettings = {
+  language: "es_ar",
+  tone: "professional",
+  length: "medium",
+  customInstructions: "",
+};
+
+const AI_LANGUAGES = [
+  { value: "es_ar", label: "Español (Argentina)" },
+  { value: "es", label: "Español neutro" },
+  { value: "en", label: "English" },
+  { value: "pt", label: "Português" },
+];
+
+const AI_TONES = [
+  { value: "professional", label: "Profesional" },
+  { value: "formal", label: "Formal / Corporativo" },
+  { value: "friendly", label: "Amigable / Cercano" },
+  { value: "casual", label: "Casual / Relajado" },
+  { value: "urgent", label: "Urgente / Directo" },
+];
+
+const AI_LENGTHS = [
+  { value: "short", label: "Corto (4-5 bloques)" },
+  { value: "medium", label: "Medio (6-8 bloques)" },
+  { value: "long", label: "Largo (8-12 bloques)" },
+];
 
 /* ---------- Constants ---------- */
 
@@ -268,6 +306,8 @@ export default function TemplatesPage() {
 
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
 
   const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -473,7 +513,7 @@ export default function TemplatesPage() {
       const res = await fetch("/api/emails/templates/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: aiPrompt }),
+        body: JSON.stringify({ prompt: aiPrompt, aiSettings }),
       });
       if (res.ok) {
         const { blocks } = await res.json();
@@ -532,7 +572,7 @@ export default function TemplatesPage() {
         <BrandingControls branding={editBranding} onChange={handleBrandingChange} />
 
         <Card>
-          <CardContent className="py-3">
+          <CardContent className="py-3 space-y-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-purple-500 shrink-0" />
               <Input
@@ -542,10 +582,78 @@ export default function TemplatesPage() {
                 className="text-sm"
                 onKeyDown={(e) => e.key === "Enter" && generateWithAI()}
               />
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setAiSettingsOpen(!aiSettingsOpen)}
+                className={`shrink-0 ${aiSettingsOpen ? "bg-muted" : ""}`}
+                title="Configurar IA"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </Button>
               <Button size="sm" variant="outline" onClick={generateWithAI} disabled={aiGenerating || !aiPrompt.trim()} className="shrink-0">
                 {aiGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generar con IA"}
               </Button>
             </div>
+
+            {aiSettingsOpen && (
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Configuración de la IA
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Idioma</Label>
+                    <Select value={aiSettings.language} onValueChange={(v) => setAiSettings({ ...aiSettings, language: v })}>
+                      <SelectTrigger className="text-sm h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AI_LANGUAGES.map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tono</Label>
+                    <Select value={aiSettings.tone} onValueChange={(v) => setAiSettings({ ...aiSettings, tone: v })}>
+                      <SelectTrigger className="text-sm h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AI_TONES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Longitud</Label>
+                    <Select value={aiSettings.length} onValueChange={(v) => setAiSettings({ ...aiSettings, length: v })}>
+                      <SelectTrigger className="text-sm h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AI_LENGTHS.map((l) => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Instrucciones adicionales (opcional)</Label>
+                  <Input
+                    value={aiSettings.customInstructions}
+                    onChange={(e) => setAiSettings({ ...aiSettings, customInstructions: e.target.value })}
+                    placeholder="Ej: Mencioná que ofrecemos soporte 24/7, incluí un código de descuento..."
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
