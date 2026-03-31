@@ -3,6 +3,7 @@ import { getUserOrg } from "@/lib/supabase/get-user-org";
 import { createServiceClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
+import { renderEmailHtml, textToBlocks, extractBranding } from "@/lib/emails/render";
 
 export async function POST(request: NextRequest) {
   const { user, orgId } = await getUserOrg();
@@ -38,10 +39,6 @@ export async function POST(request: NextRequest) {
   const replySubject = subject ?? `Re: ${original.subject ?? "(sin asunto)"}`;
   const toEmail = original.reply_to ?? original.from_email;
 
-  const fullBody = emailConfig?.signature
-    ? `${body}\n\n---\n${emailConfig.signature}`
-    : body;
-
   const creds = emailConfig?.credentials as {
     smtp_host?: string;
     smtp_port?: string;
@@ -74,10 +71,24 @@ export async function POST(request: NextRequest) {
 
   const fromEmail = `${senderName} <${fromAddress}>`;
 
+  // Render HTML email with branding
+  const branding = extractBranding(emailConfig);
+  const blocks = textToBlocks(body);
+  let htmlBody: string | undefined;
+  let plainText: string;
+
+  try {
+    const rendered = await renderEmailHtml(blocks, branding, `Re: ${original.subject ?? ""}`);
+    htmlBody = rendered.html;
+    plainText = rendered.text;
+  } catch (err) {
+    console.error("Error rendering email template:", err);
+    plainText = emailConfig?.signature ? `${body}\n\n---\n${emailConfig.signature}` : body;
+  }
+
   let sentMessageId: string | null = null;
   let sendMethod: "smtp" | "resend_client" | "resend_platform" = "resend_platform";
 
-  // Priority: 1) SMTP  2) Client Resend  3) Platform Resend  4) Error
   if (hasSmtp) {
     try {
       const transporter = nodemailer.createTransport({
@@ -91,7 +102,8 @@ export async function POST(request: NextRequest) {
         from: fromEmail,
         to: toEmail,
         subject: replySubject,
-        text: fullBody,
+        text: plainText,
+        html: htmlBody,
         replyTo: replyToAddress,
         inReplyTo: original.thread_id ?? undefined,
         references: original.thread_id ?? undefined,
@@ -111,7 +123,8 @@ export async function POST(request: NextRequest) {
         from: fromEmail,
         to: [toEmail],
         subject: replySubject,
-        text: fullBody,
+        text: plainText,
+        html: htmlBody,
         replyTo: replyToAddress,
         headers: original.thread_id ? { "In-Reply-To": original.thread_id } : undefined,
       });
@@ -134,7 +147,8 @@ export async function POST(request: NextRequest) {
       from: fromEmail,
       to: [toEmail],
       subject: replySubject,
-      text: fullBody,
+      text: plainText,
+      html: htmlBody,
       replyTo: replyToAddress,
       headers: original.thread_id ? { "In-Reply-To": original.thread_id } : undefined,
     });
@@ -159,7 +173,7 @@ export async function POST(request: NextRequest) {
       inbound_email_id: emailId,
       to_email: toEmail,
       subject: replySubject,
-      body_text: fullBody,
+      body_text: plainText,
       sent_by: user.id,
       is_auto_reply: false,
       resend_message_id: sentMessageId,
