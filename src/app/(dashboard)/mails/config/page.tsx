@@ -9,7 +9,6 @@ import { ConnectionTab } from "@/components/mail-config/connection-tab";
 import { AppearanceTab } from "@/components/mail-config/appearance-tab";
 import { ClassificationTab } from "@/components/mail-config/classification-tab";
 import { AutomationTab } from "@/components/mail-config/automation-tab";
-import { TemplatesTab } from "@/components/mail-config/templates-tab";
 import { DEFAULT_CONFIG, type EmailConfig } from "@/components/mail-config/types";
 
 export default function MailConfigPage() {
@@ -120,7 +119,6 @@ export default function MailConfigPage() {
         <TabsList>
           <TabsTrigger value="connection">Conexión</TabsTrigger>
           <TabsTrigger value="appearance">Personalización</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="classification">Clasificación IA</TabsTrigger>
           <TabsTrigger value="automation">Automatización</TabsTrigger>
         </TabsList>
@@ -142,10 +140,6 @@ export default function MailConfigPage() {
             onSave={saveConfig}
             setConfig={setConfig}
           />
-        </TabsContent>
-
-        <TabsContent value="templates" className="mt-6 space-y-6">
-          <TemplatesTab />
         </TabsContent>
 
         <TabsContent value="classification" className="mt-6 space-y-6">
