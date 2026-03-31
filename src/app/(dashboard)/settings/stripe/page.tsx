@@ -90,9 +90,13 @@ export default function StripeSettingsPage() {
   const [subCount, setSubCount] = useState(0);
   const [connectMethod, setConnectMethod] = useState<"oauth" | "apikey" | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncPhase, setSyncPhase] = useState<string | null>(null);
   const [syncIncomplete, setSyncIncomplete] = useState(false);
   const [liveCustomers, setLiveCustomers] = useState<number | null>(null);
   const [liveSubs, setLiveSubs] = useState<number | null>(null);
+  const [totalCustomers, setTotalCustomers] = useState<number | null>(null);
+  const [totalSubs, setTotalSubs] = useState<number | null>(null);
+  const [pendingSync, setPendingSync] = useState(false);
 
   // Webhook registration state
   const [registeringWebhook, setRegisteringWebhook] = useState(false);
@@ -157,12 +161,29 @@ export default function StripeSettingsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (pendingSync && connection && !syncing) {
+      setPendingSync(false);
+      handleSync();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSync, connection]);
+
+  useEffect(() => {
+    if (connection && !loading && customerCount === 0 && subCount === 0 && !syncing && !syncIncomplete) {
+      handleSync();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, loading]);
+
   async function handleSync() {
     setSyncing(true);
     setSyncIncomplete(false);
-    // Resume UX: start counters from what's already in DB, not 0
-    setLiveCustomers(customerCount);
-    setLiveSubs(subCount);
+    setSyncPhase("counting");
+    setLiveCustomers(0);
+    setLiveSubs(0);
+    setTotalCustomers(null);
+    setTotalSubs(null);
     let completed = false;
 
     try {
@@ -191,11 +212,17 @@ export default function StripeSettingsPage() {
               phase: string;
               customers: number;
               subscriptions: number;
+              totalCustomers: number;
+              totalSubscriptions: number;
               done: boolean;
               error?: string;
             };
+
+            setSyncPhase(data.phase);
             setLiveCustomers(data.customers);
             setLiveSubs(data.subscriptions);
+            if (data.totalCustomers > 0) setTotalCustomers(data.totalCustomers);
+            if (data.totalSubscriptions > 0) setTotalSubs(data.totalSubscriptions);
 
             if (data.done) {
               completed = true;
@@ -219,8 +246,11 @@ export default function StripeSettingsPage() {
       toast.error("Error de conexión durante la sincronización");
     } finally {
       setSyncing(false);
+      setSyncPhase(null);
       setLiveCustomers(null);
       setLiveSubs(null);
+      setTotalCustomers(null);
+      setTotalSubs(null);
     }
   }
 
@@ -271,6 +301,9 @@ export default function StripeSettingsPage() {
         setApiKey("");
         setConnectMethod(null);
         await loadData();
+        if (data.needsSync) {
+          setPendingSync(true);
+        }
       } else {
         toast.error(data.error || "Error al conectar");
       }
@@ -388,14 +421,39 @@ export default function StripeSettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold tabular-nums transition-all">
-                  {liveCustomers !== null ? liveCustomers : customerCount}
-                  {syncing && liveCustomers !== null && <span className="text-base text-muted-foreground ml-1 animate-pulse">...</span>}
+                  {syncing && liveCustomers !== null ? (
+                    <>
+                      {liveCustomers}
+                      {totalCustomers !== null && (
+                        <span className="text-base font-normal text-muted-foreground ml-1">
+                          / {totalCustomers}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    customerCount
+                  )}
                 </div>
-                <div className="flex items-center gap-3 mt-1">
-                  <Button variant="link" className="px-0 h-auto" asChild>
-                    <Link href="/ventas">Ver clientes <ArrowRight className="ml-1 h-3 w-3" /></Link>
-                  </Button>
-                </div>
+                {syncing && totalCustomers !== null && (syncPhase === "customers" || syncPhase === "counting") && (
+                  <div className="mt-2">
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-300"
+                        style={{ width: `${totalCustomers > 0 ? Math.min((liveCustomers ?? 0) / totalCustomers * 100, 100) : 0}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {syncPhase === "counting" ? "Obteniendo de Stripe..." : `Sincronizando ${liveCustomers} de ${totalCustomers}`}
+                    </p>
+                  </div>
+                )}
+                {!syncing && (
+                  <div className="flex items-center gap-3 mt-1">
+                    <Button variant="link" className="px-0 h-auto" asChild>
+                      <Link href="/ventas">Ver clientes <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -404,17 +462,42 @@ export default function StripeSettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold tabular-nums transition-all">
-                  {liveSubs !== null ? liveSubs : subCount}
-                  {syncing && liveSubs !== null && <span className="text-base text-muted-foreground ml-1 animate-pulse">...</span>}
+                  {syncing && liveSubs !== null ? (
+                    <>
+                      {liveSubs}
+                      {totalSubs !== null && (
+                        <span className="text-base font-normal text-muted-foreground ml-1">
+                          / {totalSubs}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    subCount
+                  )}
                 </div>
-                <div className="flex items-center gap-3 mt-1">
-                  <Button variant="link" className="px-0 h-auto" asChild>
-                    <Link href="/ventas">Ver suscripciones <ArrowRight className="ml-1 h-3 w-3" /></Link>
-                  </Button>
-                </div>
+                {syncing && totalSubs !== null && (syncPhase === "subscriptions") && (
+                  <div className="mt-2">
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-300"
+                        style={{ width: `${totalSubs > 0 ? Math.min((liveSubs ?? 0) / totalSubs * 100, 100) : 0}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Sincronizando {liveSubs} de {totalSubs}
+                    </p>
+                  </div>
+                )}
+                {!syncing && (
+                  <div className="flex items-center gap-3 mt-1">
+                    <Button variant="link" className="px-0 h-auto" asChild>
+                      <Link href="/ventas">Ver suscripciones <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
-            <Card className="border-dashed">
+            <Card className={syncing ? "border-primary/30 md:col-span-2" : "border-dashed"}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Sincronización Manual</CardTitle>
               </CardHeader>
@@ -425,23 +508,53 @@ export default function StripeSettingsPage() {
                     <p>La última sincronización no terminó. Los datos pueden estar incompletos. Intentá de nuevo.</p>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mb-3">
-                  {syncing
-                    ? `Sincronizando... ${liveCustomers ?? 0} clientes, ${liveSubs ?? 0} suscripciones`
-                    : "Forzá una re-sincronización completa desde Stripe."}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={syncing}
-                >
-                  {syncing ? (
-                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Sincronizando...</>
-                  ) : (
-                    syncIncomplete ? "Reintentar sincronización" : "Re-sincronizar ahora"
-                  )}
-                </Button>
+                {syncing ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <p className="text-sm font-medium">
+                        {syncPhase === "counting" && "Obteniendo datos de Stripe..."}
+                        {syncPhase === "customers" && `Sincronizando clientes... ${liveCustomers ?? 0}${totalCustomers ? ` de ${totalCustomers}` : ""}`}
+                        {syncPhase === "subscriptions" && `Sincronizando suscripciones... ${liveSubs ?? 0}${totalSubs ? ` de ${totalSubs}` : ""}`}
+                      </p>
+                    </div>
+                    {syncPhase === "counting" && (
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        {(totalCustomers ?? 0) > 0 && <p>{totalCustomers} clientes encontrados en Stripe</p>}
+                        {(totalSubs ?? 0) > 0 && <p>{totalSubs} suscripciones encontradas en Stripe</p>}
+                      </div>
+                    )}
+                    {(syncPhase === "customers" || syncPhase === "subscriptions") && totalCustomers !== null && (
+                      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: (() => {
+                              const tc = totalCustomers || 1;
+                              const ts = totalSubs || 1;
+                              const total = tc + ts;
+                              const done = (liveCustomers ?? 0) + (liveSubs ?? 0);
+                              return `${Math.min((done / total) * 100, 100)}%`;
+                            })(),
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Forzá una re-sincronización completa desde Stripe.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSync}
+                    >
+                      {syncIncomplete ? "Reintentar sincronización" : "Re-sincronizar ahora"}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>

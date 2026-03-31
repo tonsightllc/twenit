@@ -131,86 +131,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Sync data in background (don't await to avoid timeout on large accounts)
-  syncStripeData(userProfile.org_id, apiKey).catch((err) =>
-    console.error("[CONNECT-APIKEY] Sync error:", err)
-  );
-
   return NextResponse.json({
     success: true,
+    needsSync: true,
     accountId: account.id,
     livemode: isLive,
     webhookRegistered: webhookSecret !== null,
   });
-}
-
-async function syncStripeData(orgId: string, apiKey: string) {
-  const supabase = await createServiceClient();
-  const stripeClient = new Stripe(apiKey, { apiVersion: STRIPE_API_VERSION });
-
-  try {
-    // Sync customers
-    const customers = await stripeClient.customers
-      .list({ limit: 100 })
-      .autoPagingToArray({ limit: 10000 });
-
-    for (const customer of customers) {
-      await supabase.from("customers").upsert(
-        {
-          org_id: orgId,
-          stripe_customer_id: customer.id,
-          email: customer.email || "",
-          name: customer.name || null,
-          metadata: customer.metadata || {},
-        },
-        { onConflict: "org_id,stripe_customer_id" }
-      );
-    }
-
-    // Sync subscriptions
-    const subscriptions = await stripeClient.subscriptions
-      .list({ limit: 100 })
-      .autoPagingToArray({ limit: 10000 });
-
-    for (const sub of subscriptions) {
-      const { data: dbCustomer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("stripe_customer_id", sub.customer as string)
-        .single();
-
-      if (dbCustomer) {
-        const currentPeriodStart = (
-          sub as unknown as { current_period_start?: number }
-        ).current_period_start;
-        const currentPeriodEnd = (
-          sub as unknown as { current_period_end?: number }
-        ).current_period_end;
-
-        await supabase.from("subscriptions").upsert(
-          {
-            org_id: orgId,
-            customer_id: dbCustomer.id,
-            stripe_subscription_id: sub.id,
-            stripe_price_id: sub.items.data[0]?.price.id || null,
-            status: sub.status,
-            current_period_start: currentPeriodStart
-              ? new Date(currentPeriodStart * 1000).toISOString()
-              : null,
-            current_period_end: currentPeriodEnd
-              ? new Date(currentPeriodEnd * 1000).toISOString()
-              : null,
-            cancel_at_period_end: sub.cancel_at_period_end,
-            canceled_at: sub.canceled_at
-              ? new Date(sub.canceled_at * 1000).toISOString()
-              : null,
-          },
-          { onConflict: "org_id,stripe_subscription_id" }
-        );
-      }
-    }
-  } catch (err) {
-    console.error("[CONNECT-APIKEY] Sync error:", err);
-  }
 }
