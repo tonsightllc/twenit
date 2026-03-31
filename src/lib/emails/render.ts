@@ -29,6 +29,24 @@ export async function renderEmailHtml(
   return { html, text };
 }
 
+export async function renderCustomHtml(
+  rawHtml: string,
+  branding: BrandingConfig,
+  previewText?: string,
+): Promise<string> {
+  const children = React.createElement("div", {
+    dangerouslySetInnerHTML: { __html: rawHtml },
+  });
+
+  const element = React.createElement(BaseLayout, {
+    ...branding,
+    previewText,
+    children,
+  });
+
+  return render(element);
+}
+
 export function textToBlocks(text: string): EmailBlock[] {
   return text
     .split("\n\n")

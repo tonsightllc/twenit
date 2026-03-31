@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   const { orgId } = await getUserOrg();
   if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, subject, blocks, template_type } = await request.json();
+  const { name, subject, blocks, template_type, custom_html, branding } = await request.json();
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
       subject: subject ?? "",
       blocks: blocks ?? [],
       template_type: template_type ?? "custom",
+      custom_html: custom_html ?? null,
+      branding: branding ?? {},
     })
     .select()
     .single();
@@ -72,7 +74,7 @@ export async function PUT(request: NextRequest) {
   const { orgId } = await getUserOrg();
   if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, name, subject, blocks, enabled } = await request.json();
+  const { id, name, subject, blocks, enabled, custom_html, branding } = await request.json();
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
@@ -84,6 +86,8 @@ export async function PUT(request: NextRequest) {
   if (subject !== undefined) update.subject = subject;
   if (blocks !== undefined) update.blocks = blocks;
   if (enabled !== undefined) update.enabled = enabled;
+  if (custom_html !== undefined) update.custom_html = custom_html;
+  if (branding !== undefined) update.branding = branding;
 
   const { data: template, error } = await supabase
     .from("email_templates")
