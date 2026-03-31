@@ -140,7 +140,7 @@ export default function InboxPage() {
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [replies, setReplies] = useState<EmailReply[]>([]);
-  const [hasSmtp, setHasSmtp] = useState<boolean | null>(null);
+  const [hasOwnSender, setHasOwnSender] = useState<boolean | null>(null);
 
   const supabase = createClient();
 
@@ -176,7 +176,11 @@ export default function InboxPage() {
     if (res.ok) {
       const { config } = await res.json();
       const creds = config?.credentials;
-      setHasSmtp(!!(creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass));
+      const method = config?.connection_method;
+      const smtp = !!(creds?.smtp_host && creds?.smtp_user && creds?.smtp_pass);
+      const clientResend = !!creds?.resend_api_key;
+      const imap = method === "imap";
+      setHasOwnSender(smtp || clientResend || imap);
     }
   }, []);
 
@@ -744,13 +748,13 @@ export default function InboxPage() {
 
                   {/* Reply input */}
                   <div className="border-t p-4 shrink-0 space-y-3">
-                    {hasSmtp === false && (
+                    {hasOwnSender === false && (
                       <div className="flex items-center gap-2 p-2.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
                         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                         <span>
-                          Las respuestas se envían desde twenit.com. Para enviar desde tu propio email,{" "}
+                          Las respuestas se envían desde twenit.com. Para enviar desde tu propio dominio,{" "}
                           <a href="/mails/config" className="font-medium underline hover:no-underline">
-                            configurá tu conexión SMTP
+                            configurá tu conexión de email
                           </a>.
                         </span>
                       </div>

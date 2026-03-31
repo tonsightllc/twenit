@@ -63,15 +63,20 @@ export function ConnectionTab({ config, inboundAddress, saving, onUpdate, onSave
   };
 
   const saveResendClient = async () => {
-    await onSave({
-      provider: "resend_client",
-      connection_method: "resend_client",
-      credentials: {
-        ...config.credentials,
-        resend_api_key: resendApiKey,
-        resend_from_email: resendFromEmail,
-      },
-    });
+    try {
+      await onSave({
+        provider: "resend_client",
+        connection_method: "resend_client",
+        credentials: {
+          ...config.credentials,
+          resend_api_key: resendApiKey,
+          resend_from_email: resendFromEmail,
+        },
+      });
+      toast.success("Conexión con Resend guardada");
+    } catch {
+      toast.error("Error al guardar la conexión");
+    }
   };
 
   const method = config.connection_method;
