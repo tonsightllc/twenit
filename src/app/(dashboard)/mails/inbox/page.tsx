@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Inbox, Send, Archive, Trash2, Star, Search, Forward, Mail, Clock,
   User, Bot, RefreshCw, Sparkles, Tag, ExternalLink, CreditCard,
-  PauseCircle, AlertCircle, CheckCircle2, X, Loader2,
+  PauseCircle, AlertCircle, CheckCircle2, X, Loader2, Eye,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -57,6 +57,22 @@ interface EmailLabel {
   id: string;
   name: string;
   color: string;
+}
+
+interface TemplateBranding {
+  language?: string;
+  isFavorite?: boolean;
+}
+
+interface EmailTemplate {
+  id: string;
+  name: string;
+  template_type: string;
+  subject: string;
+  blocks: any[];
+  custom_html?: string | null;
+  branding?: TemplateBranding;
+  is_predefined: boolean;
 }
 
 interface MappedEmail {
@@ -142,6 +158,14 @@ export default function InboxPage() {
   const [replies, setReplies] = useState<EmailReply[]>([]);
   const [hasOwnSender, setHasOwnSender] = useState<boolean | null>(null);
 
+  // Templates
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateFilter, setTemplateFilter] = useState<string>("all");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+
   const supabase = createClient();
 
   const fetchEmails = useCallback(async () => {
@@ -184,10 +208,19 @@ export default function InboxPage() {
     }
   }, []);
 
+  const fetchTemplates = useCallback(async () => {
+    const res = await fetch("/api/emails/templates");
+    if (res.ok) {
+      const { templates } = await res.json();
+      setTemplates(templates ?? []);
+    }
+  }, []);
+
   useEffect(() => {
     fetchEmails();
     fetchLabels();
     fetchEmailConfig();
+    fetchTemplates();
 
     const channel = supabase
       .channel("inbox-realtime")
@@ -203,7 +236,7 @@ export default function InboxPage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetchEmails, fetchLabels, supabase]);
+  }, [fetchEmails, fetchLabels, fetchEmailConfig, fetchTemplates, supabase]);
 
   // Fetch customer when email selected
   const fetchCustomer = useCallback(async (email: MappedEmail) => {
@@ -240,6 +273,7 @@ export default function InboxPage() {
   const selectEmail = useCallback(async (email: MappedEmail) => {
     setSelectedEmail(email);
     setReplyContent("");
+    setSelectedTemplate(null);
     setReplies([]);
     fetchCustomer(email);
     fetchReplies(email.id);
@@ -296,13 +330,19 @@ export default function InboxPage() {
   };
 
   const handleReply = async () => {
-    if (!selectedEmail || !replyContent.trim()) return;
+    if (!selectedEmail) return;
     setSending(true);
     try {
+      const payload = {
+        inbound_email_id: selectedEmail.id,
+        body: replyContent || " ",
+        template_id: selectedTemplate?.id,
+        customer_id: selectedEmail.customerId,
+      };
       const res = await fetch("/api/emails/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailId: selectedEmail.id, body: replyContent }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
@@ -447,8 +487,69 @@ export default function InboxPage() {
     return date.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
   };
 
+  const handlePreview = async () => {
+    if (!selectedTemplate || !selectedEmail) return;
+    try {
+      // Pedir a a la api el renderizado o armarlo basico si no hay endpoint.
+      // Como no armamos un endpoint nuevo exprofeso, armamos HTML rudimentario o
+      // podríamos usar API de sugerencias usando los blocks.
+      // Para simular, hacemos algo simple o llamamos a reply en preview mode.
+      const payload = {
+        template_id: selectedTemplate.id,
+        body: replyContent || " ",
+        customer_id: selectedEmail.customerId || null,
+        preview_only: true, // Si preparamos el endpoint
+      };
+      const res = await fetch("/api/emails/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const { html } = await res.json();
+        setPreviewHtml(html);
+        setPreviewOpen(true);
+      } else {
+        toast.error("Error cargando vista previa");
+      }
+    } catch {
+      toast.error("Error generando vista previa");
+    }
+  };
+
+  const filteredTemplates = templates.filter((t) => {
+    const matchesSearch = t.name.toLowerCase().includes(templateSearch.toLowerCase());
+    const lang = t.branding?.language || "es";
+    const matchesFilter = templateFilter === "all" || 
+      (templateFilter === "favorites" && t.branding?.isFavorite) || 
+      (templateFilter === lang);
+    return matchesSearch && matchesFilter;
+  }).sort((a, b) => {
+    if (a.branding?.isFavorite && !b.branding?.isFavorite) return -1;
+    if (!a.branding?.isFavorite && b.branding?.isFavorite) return 1;
+    return 0;
+  });
+
   return (
     <div className="space-y-4 h-[calc(100vh-100px)] flex flex-col">
+      {/* Vista Previa Modal */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-screen">
+            <div className="p-4 border-b flex justify-between items-center shrink-0">
+              <h2 className="font-semibold">Vista Previa</h2>
+              <Button variant="ghost" size="icon" onClick={() => setPreviewOpen(false)}><X className="h-4 w-4"/></Button>
+            </div>
+            <div className="p-0 overflow-y-auto flex-1 bg-gray-100">
+              <iframe 
+                srcDoc={previewHtml}
+                className="w-full h-full min-h-[500px] border-0"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
@@ -779,13 +880,71 @@ export default function InboxPage() {
                             : <Sparkles className="h-3 w-3 mr-1" />}
                           Sugerir con IA
                         </Button>
+                        
+                        {/* Selector Inteligente de Templates */}
+                        <div className="relative group">
+                          {selectedTemplate ? (
+                             <div className="flex items-center gap-1">
+                                <Button variant="outline" size="sm" className="bg-primary/5 border-primary/20 text-primary" onClick={() => setSelectedTemplate(null)}>
+                                  {selectedTemplate.name} <X className="ml-2 h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={handlePreview} title="Vista previa">
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                             </div>
+                          ) : (
+                             <div className="relative inline-block text-left">
+                                <Button variant="outline" size="sm" className="text-xs" 
+                                  onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const dropdown = document.getElementById('template-dropdown');
+                                    if(dropdown) {
+                                      dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+                                    }
+                                  }}>
+                                  <Tag className="h-3 w-3 mr-1.5" />
+                                  Elegir Template
+                                </Button>
+                                <div id="template-dropdown" className="absolute bottom-full left-0 mb-2 w-72 bg-popover border shadow-md rounded-md hidden z-50">
+                                  <div className="p-2 space-y-2">
+                                    <Input placeholder="Buscar template..." value={templateSearch} onChange={e => setTemplateSearch(e.target.value)} className="h-8 text-xs" />
+                                    <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-b">
+                                       <Badge variant={templateFilter === "all" ? "default" : "outline"} className="cursor-pointer shrink-0" onClick={() => setTemplateFilter("all")}>Todos</Badge>
+                                       <Badge variant={templateFilter === "favorites" ? "default" : "outline"} className="cursor-pointer shrink-0" onClick={() => setTemplateFilter("favorites")}>⭐️ Favoritos</Badge>
+                                       <Badge variant={templateFilter === "es" ? "default" : "outline"} className="cursor-pointer shrink-0" onClick={() => setTemplateFilter("es")}>🇪🇸 ES</Badge>
+                                       <Badge variant={templateFilter === "en" ? "default" : "outline"} className="cursor-pointer shrink-0" onClick={() => setTemplateFilter("en")}>🇺🇸 EN</Badge>
+                                       <Badge variant={templateFilter === "pt" ? "default" : "outline"} className="cursor-pointer shrink-0" onClick={() => setTemplateFilter("pt")}>🇧🇷 PT</Badge>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                      {filteredTemplates.length === 0 ? (
+                                        <div className="p-2 text-xs text-center text-muted-foreground">
+                                          Sin resultados. <a href="/mails/templates" className="text-primary underline">Crear nuevo</a>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {filteredTemplates.map(t => (
+                                            <button key={t.id} onClick={() => { setSelectedTemplate(t); document.getElementById('template-dropdown')!.style.display = 'none'; }} 
+                                              className="w-full text-left text-xs p-2 hover:bg-muted rounded-md flex items-center justify-between">
+                                              <span>{t.name}</span>
+                                              <div className="flex gap-1 items-center">
+                                                {t.branding?.language === "en" && "🇺🇸"}
+                                                {t.branding?.language === "es" && "🇪🇸"}
+                                                {t.branding?.language === "pt" && "🇧🇷"}
+                                                {t.branding?.isFavorite && <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+                                              </div>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                             </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Forward className="mr-1.5 h-3.5 w-3.5" />
-                          Reenviar
-                        </Button>
-                        <Button size="sm" onClick={handleReply} disabled={sending || !replyContent.trim()}>
+                        <Button size="sm" onClick={handleReply} disabled={sending || (!replyContent.trim() && !selectedTemplate)}>
                           {sending
                             ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                             : <Send className="mr-1.5 h-3.5 w-3.5" />}

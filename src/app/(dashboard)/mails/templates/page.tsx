@@ -19,7 +19,7 @@ import {
 import {
   Plus, Edit, Trash2, Mail, FileText, Eye, Save, X, ArrowLeft,
   Sparkles, Loader2, Code, Braces, ChevronDown, ChevronUp,
-  PenLine, Settings2, SlidersHorizontal,
+  PenLine, Settings2, SlidersHorizontal, Star, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TemplateEditor } from "@/components/mail-config/template-editor";
@@ -37,6 +37,8 @@ interface TemplateBranding {
   signature?: string;
   showFooter?: boolean;
   footerText?: string;
+  language?: string;
+  isFavorite?: boolean;
 }
 
 interface EmailTemplate {
@@ -233,6 +235,78 @@ function BrandingControls({ branding, onChange }: { branding: TemplateBranding; 
   );
 }
 
+/* ---------- AI Options ---------- */
+
+function LanguageAndFavoriteControls({
+  branding, onChange, onGenerateVariation, generating
+}: {
+  branding: TemplateBranding;
+  onChange: (b: TemplateBranding) => void;
+  onGenerateVariation: (lang: string) => void;
+  generating: boolean;
+}) {
+  const [generateTarget, setGenerateTarget] = useState("en");
+
+  return (
+    <Card className="border shadow-sm">
+      <CardHeader className="py-4 pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span>Opciones del Template</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onChange({ ...branding, isFavorite: !branding.isFavorite })}
+            className={branding.isFavorite ? "text-yellow-500 hover:text-yellow-600" : "text-muted-foreground hover:text-foreground"}
+            title={branding.isFavorite ? "Quitar de favoritos" : "Marcar como favorito"}
+          >
+            <Star className={`h-4 w-4 ${branding.isFavorite ? "fill-current" : ""}`} /> Favorito
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 py-2 pb-4">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Idioma nativo de este template</Label>
+          <Select value={branding.language || "es"} onValueChange={(v) => onChange({ ...branding, language: v })}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="es">🇪🇸 Español</SelectItem>
+              <SelectItem value="en">🇺🇸 Inglés</SelectItem>
+              <SelectItem value="pt">🇧🇷 Portugués</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="h-px bg-border" />
+        
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold">Generar variante de idioma</Label>
+          <p className="text-[10px] text-muted-foreground leading-tight">
+            Crea una copia exacta traducida. El nuevo template mantendrá la configuración y HTML actuales, pero su texto estará en el idioma elegido.
+          </p>
+          <div className="flex gap-2">
+            <Select value={generateTarget} onValueChange={setGenerateTarget}>
+              <SelectTrigger className="h-8 text-sm flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">🇺🇸 Inglés</SelectItem>
+                <SelectItem value="pt">🇧🇷 Portugués</SelectItem>
+                <SelectItem value="es">🇪🇸 Español</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" className="h-8 px-3 shrink-0" onClick={() => onGenerateVariation(generateTarget)} disabled={generating}>
+              {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : <Sparkles className="h-3 w-3 mr-1.5 text-purple-300" />}
+              Traducir
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ---------- Starter Gallery ---------- */
 
 function StarterGallery({ onSelect, onBack }: { onSelect: (t: PredefinedTemplate) => void; onBack: () => void }) {
@@ -310,6 +384,7 @@ export default function TemplatesPage() {
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
 
   const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [translating, setTranslating] = useState(false);
 
   /* ---------- Fetch ---------- */
 
@@ -530,6 +605,42 @@ export default function TemplatesPage() {
     finally { setAiGenerating(false); }
   };
 
+  const generateLanguageVariant = async (targetLang: string) => {
+    if (!editing) {
+      toast.error("Tenés que guardar el template primero");
+      return;
+    }
+    setTranslating(true);
+    try {
+      const payload = {
+        name: editName,
+        subject: editSubject,
+        blocks: editorMode === "visual" ? editBlocks : [],
+        custom_html: editorMode === "html" ? editCustomHtml || null : null,
+        target_language: targetLang,
+      };
+      
+      const res = await fetch("/api/emails/templates/generate-translation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const { template } = await res.json();
+        setTemplates((t) => [...t, template]);
+        toast.success("Variante generada y agregada a tu lista");
+      } else {
+        const { error } = await res.json();
+        toast.error(error ?? "Error al generar variante");
+      }
+    } catch {
+      toast.error("Error de conexión al generar variante");
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   /* ===================== GALLERY VIEW ===================== */
 
   if (view === "gallery") {
@@ -569,7 +680,15 @@ export default function TemplatesPage() {
           </div>
         </div>
 
-        <BrandingControls branding={editBranding} onChange={handleBrandingChange} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <BrandingControls branding={editBranding} onChange={handleBrandingChange} />
+          <LanguageAndFavoriteControls 
+             branding={editBranding} 
+             onChange={handleBrandingChange} 
+             onGenerateVariation={generateLanguageVariant}
+             generating={translating}
+          />
+        </div>
 
         <Card>
           <CardContent className="py-3 space-y-3">

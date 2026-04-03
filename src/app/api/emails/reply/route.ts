@@ -3,7 +3,7 @@ import { getUserOrg } from "@/lib/supabase/get-user-org";
 import { createServiceClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
-import { renderEmailHtml, textToBlocks, extractBranding } from "@/lib/emails/render";
+import { renderEmailHtml, renderCustomHtml, textToBlocks, extractBranding } from "@/lib/emails/render";
 
 export async function POST(request: NextRequest) {
   const { user, orgId } = await getUserOrg();
@@ -11,9 +11,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { emailId, body, subject } = await request.json();
-  if (!emailId || !body) {
-    return NextResponse.json({ error: "emailId and body are required" }, { status: 400 });
+  const { emailId, inbound_email_id, body, subject, template_id, customer_id, preview_only } = await request.json();
+  const targetEmailId = inbound_email_id || emailId;
+  
+  if (!targetEmailId || !body) {
+    return NextResponse.json({ error: "inbound_email_id and body are required" }, { status: 400 });
   }
 
   const serviceClient = await createServiceClient();
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
   const { data: original, error: fetchError } = await serviceClient
     .from("inbound_emails")
     .select("*")
-    .eq("id", emailId)
+    .eq("id", targetEmailId)
     .eq("org_id", orgId)
     .single();
 
@@ -71,19 +73,76 @@ export async function POST(request: NextRequest) {
 
   const fromEmail = `${senderName} <${fromAddress}>`;
 
+  let customerName = "Cliente";
+  let productName = "nuestro producto";
+  let amount = "$0.00";
+  
+  if (customer_id || original.customer_id) {
+    const cid = customer_id || original.customer_id;
+    const { data: cData } = await serviceClient.from("customers").select("name").eq("id", cid).maybeSingle();
+    if (cData && cData.name) customerName = cData.name;
+  }
+
+  // Fetch Template if provided
+  let templateObj = null;
+  if (template_id) {
+    const { data: tData } = await serviceClient.from("email_templates").select("*").eq("id", template_id).eq("org_id", orgId).maybeSingle();
+    templateObj = tData;
+  }
+
   // Render HTML email with branding
   const branding = extractBranding(emailConfig);
-  const blocks = textToBlocks(body);
   let htmlBody: string | undefined;
-  let plainText: string;
+  let plainText: string = body;
 
   try {
-    const rendered = await renderEmailHtml(blocks, branding, `Re: ${original.subject ?? ""}`);
-    htmlBody = rendered.html;
-    plainText = rendered.text;
+    if (templateObj) {
+      if (templateObj.custom_html) {
+        let rawHtml = templateObj.custom_html
+          .replace(/\{\{customMessage\}\}/g, body.replace(/\n/g, "<br/>"))
+          .replace(/\{\{customerName\}\}/g, customerName)
+          .replace(/\{\{companyName\}\}/g, senderName)
+          .replace(/\{\{productName\}\}/g, productName)
+          .replace(/\{\{amount\}\}/g, amount);
+        htmlBody = await renderCustomHtml(rawHtml, branding, `Re: ${original.subject ?? ""}`);
+        plainText = body; // Simplified plain text fallback
+      } else if (templateObj.blocks && templateObj.blocks.length > 0) {
+        // Find existing customMessage or append
+        let injectedBlocks = [...templateObj.blocks];
+        let hasInjected = false;
+        
+        injectedBlocks = injectedBlocks.map(b => {
+          if (b.content && typeof b.content === "string" && b.content.includes("{{customMessage}}")) {
+            hasInjected = true;
+            return { ...b, content: b.content.replace(/\{\{customMessage\}\}/g, body.replace(/\n/g, "<br/>")) };
+          }
+          if (b.content && typeof b.content === "string") {
+            return { ...b, content: b.content.replace(/\{\{customerName\}\}/g, customerName).replace(/\{\{companyName\}\}/g, senderName) };
+          }
+          return b;
+        });
+        
+        if (!hasInjected) {
+             injectedBlocks.push({ id: "custom", type: "paragraph", content: body.replace(/\n/g, "<br/>") });
+        }
+        
+        const rendered = await renderEmailHtml(injectedBlocks, branding, `Re: ${original.subject ?? ""}`);
+        htmlBody = rendered.html;
+        plainText = rendered.text;
+      }
+    } else {
+      const blocks = textToBlocks(body);
+      const rendered = await renderEmailHtml(blocks, branding, `Re: ${original.subject ?? ""}`);
+      htmlBody = rendered.html;
+      plainText = rendered.text;
+    }
   } catch (err) {
     console.error("Error rendering email template:", err);
     plainText = emailConfig?.signature ? `${body}\n\n---\n${emailConfig.signature}` : body;
+  }
+
+  if (preview_only) {
+    return NextResponse.json({ success: true, html: htmlBody || plainText });
   }
 
   let sentMessageId: string | null = null;
@@ -170,7 +229,7 @@ export async function POST(request: NextRequest) {
     .from("email_replies")
     .insert({
       org_id: orgId,
-      inbound_email_id: emailId,
+      inbound_email_id: targetEmailId,
       to_email: toEmail,
       subject: replySubject,
       body_text: plainText,
@@ -188,7 +247,7 @@ export async function POST(request: NextRequest) {
   await serviceClient
     .from("inbound_emails")
     .update({ is_read: true, status: "processed" })
-    .eq("id", emailId);
+    .eq("id", targetEmailId);
 
   return NextResponse.json({
     success: true,

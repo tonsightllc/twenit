@@ -8,6 +8,7 @@ export interface PredefinedTemplate {
   subject: string;
   emoji: string;
   blocks: EmailBlock[];
+  custom_html?: string;
 }
 
 export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
@@ -18,14 +19,22 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "welcome",
     subject: "¡Bienvenido/a a {{companyName}}!",
     emoji: "👋",
-    blocks: [
-      { id: "w1", type: "heading", content: "¡Bienvenido/a!", attrs: { level: 1 } },
-      { id: "w2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "w3", type: "paragraph", content: "Estamos muy contentos de tenerte con nosotros. Tu cuenta ya está activa y lista para usar." },
-      { id: "w4", type: "callout", content: "Si necesitás ayuda para empezar, no dudes en contactarnos. Estamos acá para ayudarte.", attrs: { variant: "info" } },
-      { id: "w5", type: "button", attrs: { label: "Comenzar ahora", href: "https://tuempresa.com" } },
-      { id: "w6", type: "paragraph", content: "¡Gracias por elegirnos!" },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">¡Bienvenido/a!</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Estamos muy contentos de tenerte con nosotros. Tu cuenta ya está activa y lista para usar.</p>
+  <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin: 24px 0; border-radius: 4px;">
+    <p style="margin: 0; color: #166534;">Si necesitás ayuda para empezar, no dudes en contactarnos. ¡Estamos acá para ayudarte!</p>
+  </div>
+  <div style="margin: 32px 0;">
+    <a href="https://tuempresa.com" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block;">Comenzar ahora</a>
+  </div>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <p style="margin-top: 32px; color: #666;">¡Gracias por elegirnos!</p>
+</div>
+    `,
   },
   {
     slug: "new_sale",
@@ -34,14 +43,23 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "new_sale",
     subject: "Confirmación de tu compra - {{productName}}",
     emoji: "🛒",
-    blocks: [
-      { id: "s1", type: "heading", content: "¡Gracias por tu compra!", attrs: { level: 1 } },
-      { id: "s2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "s3", type: "paragraph", content: "Tu compra de <strong>{{productName}}</strong> ha sido procesada correctamente." },
-      { id: "s4", type: "callout", content: "Monto: <strong>{{amount}}</strong>", attrs: { variant: "success" } },
-      { id: "s5", type: "paragraph", content: "Si tenés alguna pregunta sobre tu compra, no dudes en contactarnos." },
-      { id: "s6", type: "button", attrs: { label: "Ver mi compra", href: "https://tuempresa.com" } },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">¡Gracias por tu compra!</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Tu compra de <strong>{{productName}}</strong> ha sido procesada correctamente.</p>
+  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; margin: 24px 0; border-radius: 8px;">
+    <p style="margin: 0 0 8px 0; color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">Total pagado</p>
+    <p style="margin: 0; font-size: 24px; font-weight: 600; color: #0f172a;">{{amount}}</p>
+  </div>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <p style="margin-bottom: 16px;">Si tenés alguna pregunta sobre tu compra, no dudes en responder a este correo para contactarnos.</p>
+  <div style="margin: 32px 0;">
+    <a href="https://tuempresa.com" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block;">Ver mi compra</a>
+  </div>
+</div>
+    `,
   },
   {
     slug: "new_subscription",
@@ -50,14 +68,22 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "new_subscription",
     subject: "Tu suscripción a {{productName}} está activa",
     emoji: "🔄",
-    blocks: [
-      { id: "sub1", type: "heading", content: "¡Tu suscripción está activa!", attrs: { level: 1 } },
-      { id: "sub2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "sub3", type: "paragraph", content: "Te confirmamos que tu suscripción a <strong>{{productName}}</strong> por <strong>{{amount}}</strong> está activa." },
-      { id: "sub4", type: "callout", content: "Tu próximo cobro se realizará automáticamente. Podés cancelar en cualquier momento.", attrs: { variant: "info" } },
-      { id: "sub5", type: "button", attrs: { label: "Administrar suscripción", href: "https://tuempresa.com" } },
-      { id: "sub6", type: "paragraph", content: "Gracias por confiar en nosotros." },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">¡Tu suscripción está activa!</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Te confirmamos que tu suscripción a <strong>{{productName}}</strong> por <strong>{{amount}}</strong> está activa y lista para usar.</p>
+  <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 24px 0; border-radius: 4px;">
+    <p style="margin: 0; color: #1e40af;">Tu próximo cobro se realizará automáticamente. Podés cancelar en cualquier momento desde tu panel de control.</p>
+  </div>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <div style="margin: 32px 0;">
+    <a href="https://tuempresa.com" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block;">Administrar suscripción</a>
+  </div>
+  <p style="margin-top: 32px; color: #666;">Gracias por confiar en nosotros.</p>
+</div>
+    `,
   },
   {
     slug: "cancellation",
@@ -66,15 +92,23 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "cancellation",
     subject: "Tu suscripción ha sido cancelada",
     emoji: "😔",
-    blocks: [
-      { id: "c1", type: "heading", content: "Tu suscripción ha sido cancelada", attrs: { level: 1 } },
-      { id: "c2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "c3", type: "paragraph", content: "Te escribimos para confirmar que tu suscripción ha sido cancelada exitosamente." },
-      { id: "c4", type: "callout", content: "<strong>No se te realizarán más cobros.</strong> Tu acceso seguirá activo hasta el fin del período actual.", attrs: { variant: "warning" } },
-      { id: "c5", type: "paragraph", content: "Lamentamos verte partir. Si tenés algún comentario sobre tu experiencia, nos encantaría escucharte." },
-      { id: "c6", type: "button", attrs: { label: "Reactivar suscripción", href: "https://tuempresa.com" } },
-      { id: "c7", type: "paragraph", content: "Gracias por haber sido parte." },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">Tu suscripción ha sido cancelada</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Te escribimos para confirmar que tu suscripción ha sido cancelada exitosamente.</p>
+  <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px; margin: 24px 0; border-radius: 4px;">
+    <p style="margin: 0; color: #b45309;"><strong>No se te realizarán más cobros.</strong> Tu acceso seguirá activo hasta el fin del período actual ya abonado.</p>
+  </div>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <p style="margin-bottom: 16px;">Lamentamos verte partir. Si tenés algún comentario sobre tu experiencia, nos encantaría escucharte, simplemente responde a este mail.</p>
+  <div style="margin: 32px 0;">
+    <a href="https://tuempresa.com" style="background-color: #f1f5f9; color: #0f172a; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block;">Reactivar suscripción</a>
+  </div>
+  <p style="margin-top: 32px; color: #666;">Gracias por haber sido parte.</p>
+</div>
+    `,
   },
   {
     slug: "refund",
@@ -83,13 +117,19 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "refund_confirmation",
     subject: "Tu reembolso ha sido procesado",
     emoji: "💰",
-    blocks: [
-      { id: "r1", type: "heading", content: "Reembolso procesado", attrs: { level: 1 } },
-      { id: "r2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "r3", type: "paragraph", content: "Te informamos que tu reembolso por <strong>{{amount}}</strong> ha sido procesado correctamente." },
-      { id: "r4", type: "callout", content: "El monto debería reflejarse en tu cuenta dentro de 5-10 días hábiles, dependiendo de tu banco.", attrs: { variant: "info" } },
-      { id: "r5", type: "paragraph", content: "Si tenés alguna pregunta, no dudes en contactarnos." },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">Reembolso procesado</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Te informamos que tu solicitud de reembolso ha sido aprobada y el monto de <strong>{{amount}}</strong> ha sido procesado correctamente.</p>
+  <div style="background-color: #f0fdfa; border-left: 4px solid #14b8a6; padding: 16px; margin: 24px 0; border-radius: 4px;">
+    <p style="margin: 0; color: #0f766e;">El dinero debería reflejarse en el resumen de tu tarjeta dentro de 5-10 días hábiles, dependiendo exclusivamente de tu banco.</p>
+  </div>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <p style="margin-top: 32px; color: #666;">Si tenés alguna pregunta adicional, no dudes en contactarnos.</p>
+</div>
+    `,
   },
   {
     slug: "activation_reminder",
@@ -98,13 +138,19 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "activation_reminder",
     subject: "¡No te olvides de activar tu cuenta!",
     emoji: "⏰",
-    blocks: [
-      { id: "a1", type: "heading", content: "¡Tu cuenta te espera!", attrs: { level: 1 } },
-      { id: "a2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "a3", type: "paragraph", content: "Notamos que aún no activaste tu cuenta. Te estás perdiendo de todo lo que tenemos para ofrecerte." },
-      { id: "a4", type: "button", attrs: { label: "Activar mi cuenta", href: "https://tuempresa.com" } },
-      { id: "a5", type: "paragraph", content: "Si necesitás ayuda, estamos acá para vos." },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">¡Tu cuenta te espera!</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Notamos que aún no completaste la activación de tu cuenta. ¡Te estás perdiendo de todo lo que tenemos preparado para ofrecerte!</p>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <div style="margin: 32px 0;">
+    <a href="https://tuempresa.com" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block;">Completar Activación</a>
+  </div>
+  <p style="margin-top: 32px; color: #666;">Si estás teniendo inconvenientes técnicos, respondé este mail e intentaremos ayudarte a la brevedad.</p>
+</div>
+    `,
   },
   {
     slug: "feedback",
@@ -113,14 +159,20 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "custom",
     subject: "¿Cómo fue tu experiencia?",
     emoji: "⭐",
-    blocks: [
-      { id: "f1", type: "heading", content: "¿Cómo fue tu experiencia?", attrs: { level: 1 } },
-      { id: "f2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "f3", type: "paragraph", content: "Tu opinión es muy importante para nosotros. Nos encantaría saber cómo fue tu experiencia con <strong>{{productName}}</strong>." },
-      { id: "f4", type: "paragraph", content: "Solo te tomará un minuto y nos ayuda mucho a mejorar." },
-      { id: "f5", type: "button", attrs: { label: "Dejar mi opinión", href: "https://tuempresa.com" } },
-      { id: "f6", type: "paragraph", content: "¡Gracias por tu tiempo!" },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">¿Cómo calificarías tu experiencia?</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Tu opinión es sumamente valiosa para nosotros y para otros usuarios. Nos encantaría saber de primera mano cómo fue tu experiencia usando <strong>{{productName}}</strong>.</p>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <p style="margin-bottom: 16px;">Te invitamos a dejar tus comentarios, solo te tomará unos pocos segundos.</p>
+  <div style="margin: 32px 0;">
+    <a href="https://tuempresa.com" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block;">Dejar mi opinión ✅</a>
+  </div>
+  <p style="margin-top: 32px; color: #666;">¡Muchísimas gracias por tu tiempo!</p>
+</div>
+    `,
   },
   {
     slug: "promotion",
@@ -129,14 +181,23 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     template_type: "custom",
     subject: "¡Tenemos una oferta especial para vos!",
     emoji: "🎁",
-    blocks: [
-      { id: "p1", type: "heading", content: "¡Oferta especial!", attrs: { level: 1 } },
-      { id: "p2", type: "paragraph", content: "Hola <strong>{{customerName}}</strong>," },
-      { id: "p3", type: "paragraph", content: "Queremos agradecerte por ser parte de nuestra comunidad con una oferta exclusiva." },
-      { id: "p4", type: "callout", content: "🎉 <strong>Obtené un descuento especial</strong> en tu próxima compra. Esta oferta es por tiempo limitado.", attrs: { variant: "success" } },
-      { id: "p5", type: "button", attrs: { label: "Aprovechar oferta", href: "https://tuempresa.com" } },
-      { id: "p6", type: "paragraph", content: "¡No te lo pierdas!" },
-    ],
+    blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <h1 style="color: #111; font-size: 24px; margin-bottom: 20px;">¡Tenemos una gran sorpresa!</h1>
+  <p style="margin-bottom: 16px;">Hola <strong>{{customerName}}</strong>,</p>
+  <p style="margin-bottom: 16px;">Queremos agradecerte inmensamente por ser parte activa de nuestra comunidad. Y qué mejor forma de hacerlo que con esta oferta exclusiva.</p>
+  <div style="background-color: #faf5ff; border: 2px dashed #9333ea; padding: 24px; margin: 24px 0; border-radius: 8px; text-align: center;">
+    <p style="margin: 0 0 8px 0; color: #7e22ce; font-size: 18px; font-weight: 600;">🎉 ¡Descuento Especial!</p>
+    <p style="margin: 0; color: #581c87; font-size: 14px;">Aprovechalo hoy mismo en tu próxima compra de {{productName}}.</p>
+  </div>
+  <p style="margin-bottom: 16px;">{{customMessage}}</p>
+  <div style="margin: 32px 0; text-align: center;">
+    <a href="https://tuempresa.com" style="background-color: #9333ea; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 16px;">Obtener Beneficio</a>
+  </div>
+  <p style="margin-top: 32px; color: #666;">Esta oportunidad es por tiempo limitado. ¡No la dejes pasar!</p>
+</div>
+    `,
   },
   {
     slug: "blank",
@@ -146,5 +207,10 @@ export const PREDEFINED_TEMPLATES: PredefinedTemplate[] = [
     subject: "",
     emoji: "📄",
     blocks: [],
+    custom_html: `
+<div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+  <p>{{customMessage}}</p>
+</div>
+    `,
   },
 ];
