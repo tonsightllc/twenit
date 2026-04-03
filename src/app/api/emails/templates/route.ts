@@ -26,7 +26,8 @@ export async function GET() {
       template_type: t.template_type,
       subject: t.subject,
       blocks: t.blocks,
-      html_content: "",
+      custom_html: t.custom_html ?? null,
+      html_content: t.custom_html ?? "",
       is_predefined: true,
     }));
 
@@ -36,6 +37,20 @@ export async function GET() {
       .select();
 
     return NextResponse.json({ templates: created ?? [] });
+  }
+
+  // Backfill any ruined templates from the previous seeding bug
+  let backfilled = false;
+  for (const t of templates) {
+    if (t.is_predefined && !t.custom_html) {
+      const predefined = PREDEFINED_TEMPLATES.find((p) => p.template_type === t.template_type);
+      if (predefined && predefined.custom_html) {
+        t.custom_html = predefined.custom_html;
+        backfilled = true;
+        // Fire and forget update so next load is fast
+        supabase.from("email_templates").update({ custom_html: predefined.custom_html, html_content: predefined.custom_html }).eq("id", t.id).then();
+      }
+    }
   }
 
   return NextResponse.json({ templates });
