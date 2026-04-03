@@ -494,11 +494,12 @@ export default function TemplatesPage() {
       setEditSubject(starter.subject);
       setEditBlocks(starter.blocks);
       setEditBranding({});
-      setEditCustomHtml("");
-      setEditorMode("visual");
+      setEditCustomHtml(starter.custom_html ?? "");
+      setEditorMode(starter.custom_html ? "html" : "visual");
       setEditTemplateType(starter.template_type);
       setPreviewHtml(null);
-      if (starter.blocks.length) fetchPreview(starter.blocks, starter.subject);
+      if (starter.custom_html) fetchPreview([], starter.subject, starter.custom_html, {});
+      else if (starter.blocks.length) fetchPreview(starter.blocks, starter.subject);
     } else {
       setEditing(null);
       setEditName("");
