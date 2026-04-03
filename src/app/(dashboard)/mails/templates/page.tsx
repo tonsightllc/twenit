@@ -194,11 +194,11 @@ function BrandingControls({ branding, onChange }: { branding: TemplateBranding; 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">URL del logo</Label>
-                    <Input value={branding.logoUrl ?? ""} onChange={(e) => update({ logoUrl: e.target.value || undefined })} placeholder="https://miempresa.com/logo.png" className="text-sm" />
+                    <Input value={branding.logoUrl ?? ""} onChange={(e) => update({ logoUrl: e.target.value })} placeholder="https://miempresa.com/logo.png" className="text-sm" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Nombre (si no hay logo)</Label>
-                    <Input value={branding.senderName ?? ""} onChange={(e) => update({ senderName: e.target.value || undefined })} placeholder="Mi Empresa" className="text-sm" />
+                    <Input value={branding.senderName ?? ""} onChange={(e) => update({ senderName: e.target.value })} placeholder="Mi Empresa" className="text-sm" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Color de acento</Label>
@@ -216,7 +216,7 @@ function BrandingControls({ branding, onChange }: { branding: TemplateBranding; 
                 <Switch checked={branding.showSignature !== false} onCheckedChange={(v) => update({ showSignature: v })} />
               </div>
               {branding.showSignature !== false && (
-                <Textarea value={branding.signature ?? ""} onChange={(e) => update({ signature: e.target.value || undefined })} placeholder="Saludos,&#10;El equipo de Soporte" rows={2} className="text-sm resize-none" />
+                <Textarea value={branding.signature ?? ""} onChange={(e) => update({ signature: e.target.value })} placeholder="Saludos,&#10;El equipo de Soporte" rows={2} className="text-sm resize-none" />
               )}
             </div>
             <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
@@ -225,7 +225,7 @@ function BrandingControls({ branding, onChange }: { branding: TemplateBranding; 
                 <Switch checked={branding.showFooter !== false} onCheckedChange={(v) => update({ showFooter: v })} />
               </div>
               {branding.showFooter !== false && (
-                <Input value={branding.footerText ?? ""} onChange={(e) => update({ footerText: e.target.value || undefined })} placeholder="© 2026 Mi Empresa. Todos los derechos reservados." className="text-sm" />
+                <Input value={branding.footerText ?? ""} onChange={(e) => update({ footerText: e.target.value })} placeholder="© 2026 Mi Empresa. Todos los derechos reservados." className="text-sm" />
               )}
             </div>
           </div>
@@ -493,19 +493,39 @@ export default function TemplatesPage() {
       setEditName(starter.name);
       setEditSubject(starter.subject);
       setEditBlocks(starter.blocks);
-      setEditBranding({});
+      setEditBranding({
+        senderName: "Mi Empresa",
+        signature: "Saludos,\nEl equipo de Soporte",
+        footerText: "© 2026 Mi Empresa. Todos los derechos reservados.",
+        accentColor: "#fbbf24",
+      });
       setEditCustomHtml(starter.custom_html ?? "");
       setEditorMode(starter.custom_html ? "html" : "visual");
       setEditTemplateType(starter.template_type);
       setPreviewHtml(null);
-      if (starter.custom_html) fetchPreview([], starter.subject, starter.custom_html, {});
-      else if (starter.blocks.length) fetchPreview(starter.blocks, starter.subject);
+      if (starter.custom_html) fetchPreview([], starter.subject, starter.custom_html, {
+        senderName: "Mi Empresa",
+        signature: "Saludos,\nEl equipo de Soporte",
+        footerText: "© 2026 Mi Empresa. Todos los derechos reservados.",
+        accentColor: "#fbbf24",
+      });
+      else if (starter.blocks.length) fetchPreview(starter.blocks, starter.subject, undefined, {
+        senderName: "Mi Empresa",
+        signature: "Saludos,\nEl equipo de Soporte",
+        footerText: "© 2026 Mi Empresa. Todos los derechos reservados.",
+        accentColor: "#fbbf24",
+      });
     } else {
       setEditing(null);
       setEditName("");
       setEditSubject("");
       setEditBlocks([]);
-      setEditBranding({});
+      setEditBranding({
+        senderName: "Mi Empresa",
+        signature: "Saludos,\nEl equipo de Soporte",
+        footerText: "© 2026 Mi Empresa. Todos los derechos reservados.",
+        accentColor: "#fbbf24",
+      });
       setEditCustomHtml("");
       setEditorMode("visual");
       setEditTemplateType("custom");

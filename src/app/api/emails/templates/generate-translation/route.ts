@@ -76,6 +76,7 @@ Rules:
         name: name,
         subject: translated.subject || subject || "",
         blocks: translated.blocks || [],
+        type: "custom",
         template_type: "custom",
         custom_html: translated.custom_html || null,
         branding,

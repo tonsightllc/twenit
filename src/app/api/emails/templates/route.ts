@@ -22,6 +22,7 @@ export async function GET() {
     const seeds = PREDEFINED_TEMPLATES.map((t) => ({
       org_id: orgId,
       name: t.name,
+      type: t.template_type,
       template_type: t.template_type,
       subject: t.subject,
       blocks: t.blocks,
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
     .insert({
       org_id: orgId,
       name,
+      type: template_type ?? "custom",
       subject: subject ?? "",
       blocks: blocks ?? [],
       template_type: template_type ?? "custom",
