@@ -497,9 +497,9 @@ export default function InboxPage() {
       const payload = {
         template_id: selectedTemplate.id,
         inbound_email_id: selectedEmail.id,
-        body: replyContent || " ",
+        body: replyContent || "[Tu mensaje de respuesta aparecerá aquí]",
         customer_id: selectedEmail.customerId || null,
-        preview_only: true, // Si preparamos el endpoint
+        preview_only: true,
       };
       const res = await fetch("/api/emails/reply", {
         method: "POST",

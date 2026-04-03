@@ -91,7 +91,17 @@ export async function POST(request: NextRequest) {
   }
 
   // Render HTML email with branding
-  const branding = extractBranding(emailConfig);
+  const globalBranding = extractBranding(emailConfig);
+  const branding = { ...globalBranding };
+
+  if (templateObj?.branding) {
+    for (const key of Object.keys(templateObj.branding)) {
+      const val = templateObj.branding[key];
+      if (val !== undefined && val !== null && val !== "") {
+        (branding as any)[key] = val;
+      }
+    }
+  }
   let htmlBody: string | undefined;
   let plainText: string = body;
 
