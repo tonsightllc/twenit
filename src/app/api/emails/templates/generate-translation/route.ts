@@ -79,6 +79,7 @@ Rules:
         type: "custom",
         template_type: "custom",
         custom_html: translated.custom_html || null,
+        html_content: translated.custom_html || "",
         branding,
       })
       .select()

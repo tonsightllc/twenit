@@ -26,6 +26,7 @@ export async function GET() {
       template_type: t.template_type,
       subject: t.subject,
       blocks: t.blocks,
+      html_content: "",
       is_predefined: true,
     }));
 
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
       blocks: blocks ?? [],
       template_type: template_type ?? "custom",
       custom_html: custom_html ?? null,
+      html_content: custom_html ?? "",
       branding: branding ?? {},
     })
     .select()
