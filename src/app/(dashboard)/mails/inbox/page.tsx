@@ -496,6 +496,7 @@ export default function InboxPage() {
       // Para simular, hacemos algo simple o llamamos a reply en preview mode.
       const payload = {
         template_id: selectedTemplate.id,
+        inbound_email_id: selectedEmail.id,
         body: replyContent || " ",
         customer_id: selectedEmail.customerId || null,
         preview_only: true, // Si preparamos el endpoint
