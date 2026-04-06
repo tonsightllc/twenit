@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserOrg } from "@/lib/supabase/get-user-org";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const BLOCK_SCHEMA = `
 type BlockType = "heading" | "paragraph" | "callout" | "button" | "image" | "separator";
@@ -58,7 +57,7 @@ Formato de bloques:
 ${BLOCK_SCHEMA}
 
 Reglas:
-- Devolvé SOLO un array JSON valido, sin markdown, sin texto extra
+- Devolvé SOLO un array JSON valido, sin markdown, sin texto extra, sin code fences
 - ${langMap[lang] ?? langMap.es_ar}
 - ${toneMap[tone] ?? toneMap.professional}
 - ${lengthMap[length] ?? lengthMap.medium}
@@ -73,13 +72,91 @@ Reglas:
   return prompt;
 }
 
+async function generateWithGroq(
+  systemPrompt: string,
+  userMessage: string,
+  apiKey: string,
+): Promise<unknown[]> {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Groq ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  const raw = data.choices?.[0]?.message?.content ?? "";
+  const parsed = JSON.parse(raw);
+  // Groq with json_object may wrap in { "blocks": [...] } or return array directly
+  return Array.isArray(parsed) ? parsed : (parsed.blocks ?? parsed.email ?? []);
+}
+
+async function generateWithGemini(
+  systemPrompt: string,
+  userMessage: string,
+  apiKey: string,
+): Promise<unknown[]> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  const models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent({
+        contents: [
+          { role: "user", parts: [{ text: systemPrompt + "\n\n" + userMessage }] },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+        },
+      });
+
+      const text = result.response.text();
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed;
+      throw new Error("Gemini no devolvió un array");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if ((msg.includes("429") || msg.includes("quota")) && modelName !== models[models.length - 1]) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error("Todos los modelos de Gemini fallaron");
+}
+
 export async function POST(request: NextRequest) {
   const { orgId } = await getUserOrg();
   if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY no configurada" }, { status: 500 });
+  const groqKey = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!groqKey && !geminiKey) {
+    return NextResponse.json(
+      { error: "No hay API key de IA configurada. Agregá GROQ_API_KEY o GEMINI_API_KEY en las variables de entorno." },
+      { status: 500 },
+    );
   }
 
   const { prompt, variables, aiSettings } = await request.json();
@@ -98,31 +175,48 @@ export async function POST(request: NextRequest) {
     userMessage += `\n\nVariables disponibles:\n${vars}`;
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  // Try Groq first (free, fast), fallback to Gemini
+  const providers: Array<{ name: string; fn: () => Promise<unknown[]> }> = [];
 
-    const result = await model.generateContent({
-      contents: [
-        { role: "user", parts: [{ text: systemPrompt + "\n\n" + userMessage }] },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.7,
-      },
+  if (groqKey) {
+    providers.push({
+      name: "Groq",
+      fn: () => generateWithGroq(systemPrompt, userMessage, groqKey),
     });
-
-    const text = result.response.text();
-    const blocks = JSON.parse(text);
-
-    if (!Array.isArray(blocks)) {
-      return NextResponse.json({ error: "La IA no devolvió un array de bloques" }, { status: 500 });
-    }
-
-    return NextResponse.json({ blocks });
-  } catch (err) {
-    console.error("Error generating email blocks:", err);
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    return NextResponse.json({ error: `Error al generar: ${msg}` }, { status: 500 });
   }
+  if (geminiKey) {
+    providers.push({
+      name: "Gemini",
+      fn: () => generateWithGemini(systemPrompt, userMessage, geminiKey),
+    });
+  }
+
+  for (const provider of providers) {
+    try {
+      const blocks = await provider.fn();
+
+      if (!Array.isArray(blocks) || blocks.length === 0) {
+        console.warn(`${provider.name} devolvió datos inválidos, trying next...`);
+        continue;
+      }
+
+      return NextResponse.json({ blocks });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      console.warn(`${provider.name} failed: ${msg}`);
+
+      if (provider === providers[providers.length - 1]) {
+        const isRateLimit = msg.includes("429") || msg.includes("quota") || msg.includes("rate");
+        if (isRateLimit) {
+          return NextResponse.json(
+            { error: "Se alcanzó el límite de uso de la IA. Esperá unos segundos e intentá de nuevo." },
+            { status: 429 },
+          );
+        }
+        return NextResponse.json({ error: `Error al generar: ${msg}` }, { status: 500 });
+      }
+    }
+  }
+
+  return NextResponse.json({ error: "No se pudo generar con ningún proveedor de IA" }, { status: 500 });
 }
