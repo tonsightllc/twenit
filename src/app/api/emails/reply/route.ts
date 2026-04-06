@@ -73,9 +73,9 @@ export async function POST(request: NextRequest) {
 
   const fromEmail = `${senderName} <${fromAddress}>`;
 
-  let customerName = "Cliente";
-  let productName = "nuestro producto";
-  let amount = "$0.00";
+  let customerName = "";
+  let productName = "";
+  let amount = "";
   
   if (customer_id || original.customer_id) {
     const cid = customer_id || original.customer_id;
