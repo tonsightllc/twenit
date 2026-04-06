@@ -48,6 +48,7 @@ interface EmailReply {
   to_email: string;
   subject: string;
   body_text: string;
+  body_html?: string | null;
   sent_by: string;
   is_auto_reply: boolean;
   sent_at: string;
@@ -264,7 +265,7 @@ export default function InboxPage() {
   const fetchReplies = useCallback(async (emailId: string) => {
     const { data } = await supabase
       .from("email_replies")
-      .select("id, to_email, subject, body_text, sent_by, is_auto_reply, sent_at")
+      .select("id, to_email, subject, body_text, body_html, sent_by, is_auto_reply, sent_at")
       .eq("inbound_email_id", emailId)
       .order("sent_at", { ascending: true });
     setReplies(data ?? []);
@@ -838,11 +839,21 @@ export default function InboxPage() {
                               → {reply.to_email}
                             </span>
                           </div>
-                          <div className="mt-1.5 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                              {reply.body_text}
-                            </pre>
-                          </div>
+                            {reply.body_html ? (
+                              <div className="mt-1.5 rounded-lg border border-primary/20 bg-white overflow-hidden">
+                                <iframe
+                                  srcDoc={reply.body_html}
+                                  className="w-full h-[400px] border-0"
+                                  title={`Reply ${reply.id}`}
+                                />
+                              </div>
+                            ) : (
+                              <div className="mt-1.5 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                                  {reply.body_text}
+                                </pre>
+                              </div>
+                            )}
                         </div>
                       </div>
                     ))}

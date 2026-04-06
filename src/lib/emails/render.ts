@@ -33,7 +33,7 @@ export async function renderCustomHtml(
   rawHtml: string,
   branding: BrandingConfig,
   previewText?: string,
-): Promise<string> {
+): Promise<{ html: string; text: string }> {
   const children = React.createElement("div", {
     dangerouslySetInnerHTML: { __html: rawHtml },
   });
@@ -44,7 +44,10 @@ export async function renderCustomHtml(
     children,
   });
 
-  return render(element);
+  const html = await render(element);
+  const text = await render(element, { plainText: true });
+
+  return { html, text };
 }
 
 export function textToBlocks(text: string): EmailBlock[] {

@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   try {
     let html: string;
     if (custom_html) {
-      html = await renderCustomHtml(custom_html, mergedBranding, subject);
+      ({ html } = await renderCustomHtml(custom_html, mergedBranding, subject));
     } else {
       ({ html } = await renderEmailHtml(blocks ?? [], mergedBranding, subject));
     }

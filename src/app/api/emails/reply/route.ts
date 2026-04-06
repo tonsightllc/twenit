@@ -114,8 +114,9 @@ export async function POST(request: NextRequest) {
           .replace(/\{\{companyName\}\}/g, senderName)
           .replace(/\{\{productName\}\}/g, productName)
           .replace(/\{\{amount\}\}/g, amount);
-        htmlBody = await renderCustomHtml(rawHtml, branding, `Re: ${original.subject ?? ""}`);
-        plainText = body; // Simplified plain text fallback
+        const renderedHTML = await renderCustomHtml(rawHtml, branding, `Re: ${original.subject ?? ""}`);
+        htmlBody = renderedHTML.html;
+        plainText = renderedHTML.text; // Now we get the fully rendered text logic!
       } else if (templateObj.blocks && templateObj.blocks.length > 0) {
         // Find existing customMessage or append
         let injectedBlocks = [...templateObj.blocks];
@@ -243,6 +244,7 @@ export async function POST(request: NextRequest) {
       to_email: toEmail,
       subject: replySubject,
       body_text: plainText,
+      body_html: htmlBody,
       sent_by: user.id,
       is_auto_reply: false,
       resend_message_id: sentMessageId,
