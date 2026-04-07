@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
         subject: (translated.subject as string) || subject || "",
         blocks: (translated.blocks as unknown[]) || [],
         template_type: "custom",
+        html_content: (translated.custom_html as string) || "",
         custom_html: (translated.custom_html as string) || null,
         branding,
       })
