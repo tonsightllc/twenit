@@ -15,12 +15,15 @@ Translate the provided email content and subject into: ${langName}.
 Rules:
 1. If "custom_html" is provided, keep the EXACT HTML structure, styles, inline CSS, and attributes. Only translate the human readable text. DO NOT format as markdown, just output the raw HTML string in the JSON.
 2. If "blocks" is provided, keep the EXACT JSON structure, only translate the "content" or "label" properties.
-3. NEVER translate variables that look like {{variableName}}. Keep them exactly as they are.
-4. Output your response ONLY as a valid JSON object with the following schema, and no other text:
+3. If "branding" is provided with "signature" or "footerText", translate those too.
+4. NEVER translate variables that look like {{variableName}}. Keep them exactly as they are.
+5. NEVER translate "senderName" or "logoUrl" - keep them as-is.
+6. Output your response ONLY as a valid JSON object with the following schema, and no other text:
 {
   "subject": "translated subject here",
   "custom_html": "translated html here, or null if not provided",
-  "blocks": [ translated blocks array, or [] if not provided ]
+  "blocks": [ translated blocks array, or [] if not provided ],
+  "branding": { translated branding object with signature/footerText translated, or {} if not provided }
 }
 `;
 }
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { name, subject, blocks, custom_html, target_language } = await request.json();
+  const { name, subject, blocks, custom_html, branding: sourceBranding, target_language } = await request.json();
   if (!target_language) {
     return NextResponse.json({ error: "target_language is required" }, { status: 400 });
   }
@@ -117,6 +120,7 @@ export async function POST(request: NextRequest) {
     subject: subject || "",
     custom_html: custom_html || null,
     blocks: blocks && blocks.length > 0 ? blocks : null,
+    branding: sourceBranding || null,
   }, null, 2);
 
   const providers: Array<{ name: string; fn: () => Promise<Record<string, unknown>> }> = [];
@@ -152,7 +156,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = await createServiceClient();
-    const branding = { language: target_language };
+    const translatedBranding = (translated.branding as Record<string, unknown>) || {};
+    const mergedBranding = {
+      ...(sourceBranding || {}),
+      ...translatedBranding,
+      language: target_language,
+    };
 
     const { data: template, error } = await supabase
       .from("email_templates")
@@ -165,7 +174,7 @@ export async function POST(request: NextRequest) {
         template_type: "custom",
         html_content: (translated.custom_html as string) || "",
         custom_html: (translated.custom_html as string) || null,
-        branding,
+        branding: mergedBranding,
       })
       .select()
       .single();

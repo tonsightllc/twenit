@@ -638,6 +638,7 @@ export default function TemplatesPage() {
         subject: editSubject,
         blocks: editorMode === "visual" ? editBlocks : [],
         custom_html: editorMode === "html" ? editCustomHtml || null : null,
+        branding: editBranding,
         target_language: targetLang,
       };
       
@@ -650,7 +651,8 @@ export default function TemplatesPage() {
       if (res.ok) {
         const { template } = await res.json();
         setTemplates((t) => [...t, template]);
-        toast.success("Variante generada y agregada a tu lista");
+        toast.success("Traducción creada. Abriendo...");
+        setTimeout(() => openEditorWith({ template }), 300);
       } else {
         const { error } = await res.json();
         toast.error(error ?? "Error al generar variante");
