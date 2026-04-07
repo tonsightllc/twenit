@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
       .insert({
         org_id: orgId,
         name,
+        type: "custom",
         subject: (translated.subject as string) || subject || "",
         blocks: (translated.blocks as unknown[]) || [],
         template_type: "custom",
